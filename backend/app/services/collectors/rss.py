@@ -186,6 +186,9 @@ class RssCollector:
                 result.version.doc_metadata = {
                     "feed_url": feed_url,
                     "authority": source.authority.value,
+                    # 화면은 이 필드를 읽는다. 본문 텍스트를 파싱해서 요약을 뽑아내면
+                    # 수집기 형식이 바뀔 때마다 화면이 깨진다.
+                    "summary": item.summary,
                     # 전문을 저장하지 않았다는 사실을 명시한다 (§NFR-015).
                     "full_text_stored": False,
                 }

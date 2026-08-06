@@ -80,6 +80,30 @@ export interface MonthBucket {
   important: number;
 }
 
+/**
+ * 언론 보도 한 건. **검수를 거치지 않았다.**
+ *
+ * `PublicContentSummary` 와 필드를 일부러 겹치지 않게 뒀다. 두 타입을 같은
+ * 목록에 섞으면 타입 오류가 나야 한다 — 화면에서 섞이면 사업자가 보도를
+ * 확정된 제도로 읽는다.
+ */
+export interface NewsItem {
+  id: string;
+  title: string;
+  url: string;
+  publisher: string;
+  summary: string | null;
+  published_at: string | null;
+  authority: string;
+  matched_query: string | null;
+}
+
+export interface NewsFeed {
+  items: NewsItem[];
+  total: number;
+  caveat: string;
+}
+
 /* ---------------------------------------------------------------- 관리자 */
 
 export interface RawContent {

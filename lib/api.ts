@@ -4,6 +4,7 @@ import type {
   ContentSourceRef,
   GateReport,
   MonthBucket,
+  NewsFeed,
   PublicContentDetail,
   PublicFeed,
   RawContent,
@@ -123,6 +124,15 @@ export const publicApi = {
       // 월 목록은 하루에 몇 번 바뀔까 말까다.
       cacheSeconds: 300,
     }),
+  news: (params: { q?: string; days?: number; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.q) query.set('q', params.q);
+    query.set('days', String(params.days ?? 30));
+    query.set('limit', String(params.limit ?? 40));
+    return request<NewsFeed>(`/public/news?${query}`, undefined, {
+      cacheSeconds: PUBLIC_CACHE_SECONDS,
+    });
+  },
 };
 
 /* ---------------------------------------------------------------- 관리자 */

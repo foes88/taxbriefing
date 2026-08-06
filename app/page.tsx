@@ -4,6 +4,7 @@ import { ContentRecord } from '@/components/ContentCard';
 import { FilterBar } from '@/components/FilterBar';
 import { Masthead } from '@/components/Masthead';
 import { MonthNav, MonthStrip } from '@/components/MonthNav';
+import { SectionTabs } from '@/components/SectionTabs';
 import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
 import { todayLabel } from '@/lib/format';
 import type { MonthBucket, PublicFeed } from '@/lib/types';
@@ -56,6 +57,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   return (
     <div className="min-h-screen">
       <Masthead />
+      <SectionTabs active="policy" />
 
       <main className="mx-auto max-w-page px-4 pb-20">
         <section className="pb-2 pt-8">

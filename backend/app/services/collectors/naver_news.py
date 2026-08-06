@@ -224,6 +224,9 @@ class NaverNewsCollector:
             "origin_link": item.origin_link,
             "matched_query": query,
             "authority": source.authority.value,
+            # 화면은 이 필드를 읽는다. 본문 텍스트를 파싱해서 요약을 뽑아내면
+            # 수집기 형식이 바뀔 때마다 화면이 깨진다.
+            "summary": item.summary,
             "full_text_stored": False,
         }
         db.flush()

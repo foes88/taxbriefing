@@ -94,6 +94,38 @@ class PublicFeed(BaseModel):
     next_cursor: str | None = None
 
 
+class NewsItemOut(BaseModel):
+    """언론 보도 한 건. **공식 원문이 아니다.**
+
+    검수를 거친 콘텐츠(`PublicContentSummary`)와 이름도 필드도 일부러 다르게 뒀다.
+    화면에서 둘을 섞어 쓸 수 없어야 한다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    title: str
+    url: str
+    publisher: str
+    """언론사가 아니라 수집 출처명이다 (예: "네이버 뉴스 검색")."""
+    summary: str | None = None
+    published_at: dt.datetime | None = None
+    authority: str
+    matched_query: str | None = None
+
+
+class NewsFeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[NewsItemOut]
+    total: int
+    #: 화면 상단 경고 문구. 서버가 내려보내야 프론트가 지우기 어렵다.
+    caveat: str = (
+        "아래는 언론 보도입니다. 공식 원문으로 확인되지 않았으며 "
+        "확정된 제도 변경이 아닐 수 있습니다."
+    )
+
+
 class MonthBucket(BaseModel):
     """월별 아카이브 항목. 공포월 기준이다 — 사업자가 "몇 월 개정"으로 기억하기 때문이다."""
 
@@ -263,6 +295,67 @@ def public_feed(
     items = [_summary(c) for c in db.execute(ordered).scalars()]
     next_cursor = str(offset + limit) if offset + limit < total else None
     return PublicFeed(items=items, total=total, next_cursor=next_cursor)
+
+
+#: 뉴스 탭에 나오는 출처 등급. A·B 는 공식 원문이므로 검수 경로로만 나간다.
+#: 등급으로 가르는 이유는 그게 실제 구분이기 때문이다 — "공식이냐 보도냐".
+NEWS_GRADES = ("C", "D")
+
+
+@router.get("/news", response_model=NewsFeed)
+def public_news(
+    db: DbSession,
+    q: Annotated[str | None, Query(description="제목 키워드")] = None,
+    days: Annotated[int, Query(ge=1, le=365, description="최근 N일")] = 30,
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> NewsFeed:
+    """언론 보도 목록.
+
+    검수를 거치지 않은 항목이므로 **제목·링크·짧은 요약만** 내려보낸다.
+    본문은 애초에 저장하지 않았다 (§NFR-015).
+    """
+    since = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
+
+    stmt = (
+        select(RawContent, RawContentVersion, Source)
+        .join(Source, RawContent.source_id == Source.id)
+        .outerjoin(RawContentVersion, RawContent.current_version_id == RawContentVersion.id)
+        .where(
+            Source.authority.in_(NEWS_GRADES),
+            RawContent.status == "ACTIVE",
+            # 날짜를 모르는 항목은 뉴스 탭에 올리지 않는다. 최신순 정렬이 무의미해지고,
+            # 사업자가 오래된 기사를 오늘 소식으로 오해한다.
+            RawContent.published_at.is_not(None),
+            RawContent.published_at >= since,
+        )
+    )
+    if q:
+        stmt = stmt.where(RawContent.title.ilike(f"%{q}%"))
+
+    total = len(db.execute(stmt).all())
+    rows = db.execute(
+        stmt.order_by(RawContent.published_at.desc()).limit(limit).offset(offset)
+    ).all()
+
+    return NewsFeed(
+        items=[
+            NewsItemOut(
+                id=raw.id,
+                title=raw.title,
+                url=raw.canonical_url,
+                publisher=raw.publisher,
+                summary=(version.doc_metadata or {}).get("summary") if version else None,
+                published_at=raw.published_at,
+                authority=source.authority.value,
+                matched_query=(version.doc_metadata or {}).get("matched_query")
+                if version
+                else None,
+            )
+            for raw, version, source in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/contents/{content_id}", response_model=PublicContentDetail)
