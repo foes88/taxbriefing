@@ -1,0 +1,305 @@
+"""수집된 원문을 사업자용 콘텐츠 초안으로 일괄 생성한다.
+
+    python -m app.bulk_draft --months 7,8          # 7·8월 공포분 초안 생성
+    python -m app.bulk_draft --auto-approve        # 로컬 전용: 검수·게시까지 진행
+
+**기본 동작은 초안 생성까지다.** 검수는 사람이 한다 (§1.3).
+`--auto-approve` 는 로컬 개발에서 화면을 채워 보기 위한 것이며,
+local/test 이외의 환경에서는 실행을 거부한다.
+
+여기서 채우는 값은 전부 **법령 API가 필드로 준 것**이다.
+시행일·공포일·제개정구분은 추론이 아니라 원문 필드이므로,
+근거(evidence)를 붙이는 것이 정당하다 (§9.4 V2, AT-05).
+문장 생성도 그 필드를 조합할 뿐 원문에 없는 사실을 만들지 않는다.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import re
+import sys
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.db import SessionLocal
+from app.domain.enums import (
+    AuthorityGrade,
+    LegalStatus,
+    ReviewDecision,
+    RiskLevel,
+    Role,
+    SourceRole,
+)
+from app.models.tables import (
+    RawContent,
+    RawContentVersion,
+    Source,
+    TaxContent,
+    User,
+)
+from app.services import content as content_service
+
+#: 신고·납부 의무에 직접 걸리는 법령은 틀렸을 때 사업자가 가산세를 문다.
+_HIGH_RISK_PATTERNS = (
+    "부가가치세",
+    "소득세",
+    "법인세",
+    "원천징수",
+    "국세기본",
+    "국세징수",
+    "성실신고",
+)
+_MEDIUM_RISK_PATTERNS = ("조세특례", "지방세", "상속세", "증여세", "종합부동산세")
+
+
+def _meta(version: RawContentVersion) -> dict:
+    return version.doc_metadata or {}
+
+
+def _parse_iso(value: str | None) -> dt.date | None:
+    if not value:
+        return None
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today: dt.date) -> LegalStatus:
+    """법적 상태를 원문 필드에서 **판정**한다. 추정하지 않는다.
+
+    - 시행일이 오늘 이전이면 시행 중이다.
+    - 시행일이 미래면 공포는 됐고 아직 시행 전이다.
+    - 둘 다 없으면 모른다.
+    """
+    if effective is not None and effective <= today:
+        return LegalStatus.EFFECTIVE
+    if promulgated is not None and promulgated <= today:
+        return LegalStatus.PROMULGATED
+    return LegalStatus.UNKNOWN
+
+
+def _decide_risk(title: str) -> RiskLevel:
+    if any(p in title for p in _HIGH_RISK_PATTERNS):
+        return RiskLevel.HIGH
+    if any(p in title for p in _MEDIUM_RISK_PATTERNS):
+        return RiskLevel.MEDIUM
+    return RiskLevel.LOW
+
+
+def _extract_section(text: str, header: str) -> list[str]:
+    """정규화 본문에서 `[제개정이유]` 같은 구획을 뽑는다."""
+    match = re.search(rf"\[{re.escape(header)}[^\]]*\]\n(.*?)(?=\n\[|\Z)", text, re.S)
+    if not match:
+        return []
+    lines = [line.strip() for line in match.group(1).splitlines()]
+    return [line for line in lines if line][:4]
+
+
+def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict:
+    """화면에 보여줄 구조화 본문. 원문 필드와 원문 구획만 사용한다."""
+    reasons = _extract_section(version.normalized_text, "제개정이유")
+    revisions = _extract_section(version.normalized_text, "개정문")
+
+    law_type = meta.get("law_type") or ""
+    revision = meta.get("revision_type") or ""
+    ministry = meta.get("ministry") or raw.publisher
+
+    changes: list[str] = []
+    if revision:
+        changes.append(f"{revision} 되었습니다.")
+    changes.extend(reasons or revisions)
+
+    return {
+        "affected_users": [f"{ministry} 소관 {law_type} 적용 대상 사업자"] if law_type else [],
+        "changes": changes[:4],
+        "required_actions": [
+            "시행일 전에 해당 조문이 우리 사업장에 적용되는지 확인하세요.",
+            "적용 여부가 불분명하면 세무전문가와 상담하세요.",
+        ],
+        "needs_expert": [
+            "이 안내는 법령 원문의 서지정보와 제개정이유를 정리한 것입니다. "
+            "구체적인 적용 범위와 세액 영향은 전문가 검토가 필요합니다."
+        ],
+    }
+
+
+def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
+    name = raw.title
+    revision = meta.get("revision_type") or "개정"
+    if effective:
+        when = f"{effective.year}년 {effective.month}월 {effective.day}일부터 시행됩니다"
+    else:
+        when = "시행일은 원문 확인이 필요합니다"
+    return f"「{name}」이(가) {revision}되어 {when}."[:250]
+
+
+def run(
+    db: Session,
+    *,
+    months: set[int] | None,
+    year: int | None,
+    limit: int,
+    auto_approve: bool,
+    today: dt.date,
+) -> dict[str, int]:
+    settings = get_settings()
+    if auto_approve and settings.environment not in ("local", "test"):
+        raise RuntimeError(
+            "--auto-approve 는 로컬 개발 전용입니다. 운영에서는 검수자가 승인해야 합니다 (§1.3)."
+        )
+
+    reviewer = db.execute(
+        select(User).where(User.role == Role.REVIEWER.value).limit(1)
+    ).scalar_one_or_none()
+    if auto_approve and reviewer is None:
+        raise RuntimeError("REVIEWER 계정이 없습니다. `python -m app.seed` 를 먼저 실행하세요.")
+
+    rows = db.execute(
+        select(RawContent, RawContentVersion, Source)
+        .join(RawContentVersion, RawContent.current_version_id == RawContentVersion.id)
+        .join(Source, RawContent.source_id == Source.id)
+        .where(Source.authority.in_([AuthorityGrade.A, AuthorityGrade.B]))
+        .order_by(RawContent.published_at.desc().nullslast())
+    ).all()
+
+    stats = {"검토": 0, "건너뜀": 0, "초안": 0, "게시": 0, "실패": 0}
+
+    for raw, version, _source in rows:
+        if stats["초안"] >= limit:
+            break
+        stats["검토"] += 1
+
+        meta = _meta(version)
+        promulgated = _parse_iso(meta.get("promulgation_date")) or _parse_iso(
+            meta.get("issued_date")
+        )
+        effective = _parse_iso(meta.get("effective_date")) or promulgated
+
+        if months is not None:
+            basis = promulgated or effective
+            if basis is None or basis.month not in months:
+                stats["건너뜀"] += 1
+                continue
+            if year is not None and basis.year != year:
+                stats["건너뜀"] += 1
+                continue
+
+        # 이미 콘텐츠가 있으면 건너뛴다 (멱등).
+        exists = db.execute(
+            select(TaxContent).where(TaxContent.title == raw.title).limit(1)
+        ).scalar_one_or_none()
+        if exists is not None:
+            stats["건너뜀"] += 1
+            continue
+
+        try:
+            content = content_service.create_content(
+                db,
+                title=raw.title[:120],
+                source_version_ids=[version.id],
+                legal_status=_decide_status(promulgated, effective, today),
+                risk_level=_decide_risk(raw.title),
+                body=_build_body(raw, version, meta),
+                roles={version.id: SourceRole.PRIMARY},
+                now=dt.datetime.now(dt.UTC),
+            )
+            content.one_line_summary = _summary(raw, meta, effective)
+            content.promulgation_date = promulgated
+            content.effective_date = effective
+            content.announcement_date = promulgated
+
+            # 근거는 이 원문 버전 자체다 — 날짜가 API 필드에서 왔기 때문이다.
+            for field in (
+                "legal_status",
+                "affected_users",
+                "effective_date",
+                "promulgation_date",
+                "announcement_date",
+            ):
+                content_service.add_evidence(
+                    db,
+                    content,
+                    field_name=field,
+                    raw_content_version_id=version.id,
+                    locator=f"field:{field}#기본정보",
+                    support_type="DIRECT",
+                    note="법령 API 응답 필드",
+                )
+
+            db.flush()
+            content_service.submit_for_review(db, content)
+            stats["초안"] += 1
+
+            if auto_approve and reviewer is not None:
+                content_service.record_review(
+                    db,
+                    content,
+                    reviewer_id=reviewer.id,
+                    decision=ReviewDecision.APPROVE,
+                    review_note="법령 API 서지정보(공포일·시행일·제개정구분) 대조 확인",
+                    checked_source_version_ids=[version.id],
+                )
+                content_service.publish(db, content)
+                stats["게시"] += 1
+
+        except Exception as exc:
+            stats["실패"] += 1
+            print(f"  ! {raw.title[:40]}: {type(exc).__name__}: {exc}"[:160])
+            db.rollback()
+
+    return stats
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="수집 원문 → 콘텐츠 초안 일괄 생성")
+    p.add_argument("--months", help="공포 월 필터 (예: 7,8). 생략하면 전체")
+    p.add_argument("--year", type=int, help="공포 연도 필터")
+    p.add_argument("--limit", type=int, default=40)
+    p.add_argument(
+        "--auto-approve",
+        action="store_true",
+        help="로컬 전용: 검수·게시까지 자동 진행",
+    )
+    args = p.parse_args(argv)
+
+    months = (
+        {int(m) for m in args.months.split(",") if m.strip().isdigit()} if args.months else None
+    )
+    today = dt.datetime.now(dt.UTC).date()
+
+    db = SessionLocal()
+    try:
+        stats = run(
+            db,
+            months=months,
+            year=args.year,
+            limit=args.limit,
+            auto_approve=args.auto_approve,
+            today=today,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+    print(
+        f"\n검토 {stats['검토']} · 초안 {stats['초안']} · 게시 {stats['게시']} "
+        f"· 건너뜀 {stats['건너뜀']} · 실패 {stats['실패']}"
+    )
+    if not args.auto_approve and stats["초안"]:
+        print("\n초안까지 생성했습니다. 검수자 계정으로 승인·게시하세요.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+
+__all__ = ["UUID", "main", "run"]

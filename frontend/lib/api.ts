@@ -2,6 +2,7 @@ import type {
   AdminContent,
   ApiError,
   GateReport,
+  MonthBucket,
   PublicContentDetail,
   PublicFeed,
   RawContent,
@@ -57,6 +58,7 @@ export interface FeedFilters {
   q?: string;
   legal_status?: string[];
   risk_level?: string[];
+  month?: string;
   deadline_within_days?: number;
   limit?: number;
   offset?: number;
@@ -67,6 +69,7 @@ function toQuery(filters: FeedFilters): string {
   if (filters.q) params.set('q', filters.q);
   filters.legal_status?.forEach((v) => params.append('legal_status', v));
   filters.risk_level?.forEach((v) => params.append('risk_level', v));
+  if (filters.month) params.set('month', filters.month);
   if (filters.deadline_within_days) {
     params.set('deadline_within_days', String(filters.deadline_within_days));
   }
@@ -76,9 +79,9 @@ function toQuery(filters: FeedFilters): string {
 }
 
 export const publicApi = {
-  feed: (filters: FeedFilters = {}) =>
-    request<PublicFeed>(`/public/feed?${toQuery(filters)}`),
+  feed: (filters: FeedFilters = {}) => request<PublicFeed>(`/public/feed?${toQuery(filters)}`),
   content: (id: string) => request<PublicContentDetail>(`/public/contents/${id}`),
+  months: () => request<MonthBucket[]>('/public/months'),
 };
 
 /* ---------------------------------------------------------------- 관리자 */

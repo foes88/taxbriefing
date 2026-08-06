@@ -70,6 +70,14 @@ export interface PublicFeed {
   next_cursor: string | null;
 }
 
+/** 월별 아카이브. 공포월 기준 — 사업자는 "몇 월 개정"으로 기억한다. */
+export interface MonthBucket {
+  month: string;
+  label: string;
+  count: number;
+  important: number;
+}
+
 /* ---------------------------------------------------------------- 관리자 */
 
 export interface RawContent {

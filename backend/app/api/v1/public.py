@@ -15,11 +15,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
-from app.core.errors import NotFoundError
+from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain.enums import LegalStatus, RiskLevel, WorkflowStatus
 from app.models.tables import (
     ContentEvidence,
@@ -91,6 +91,20 @@ class PublicFeed(BaseModel):
     next_cursor: str | None = None
 
 
+class MonthBucket(BaseModel):
+    """월별 아카이브 항목. 공포월 기준이다 — 사업자가 "몇 월 개정"으로 기억하기 때문이다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    month: str
+    """YYYY-MM"""
+    label: str
+    """"2026년 7월" """
+    count: int
+    important: int
+    """HIGH·CRITICAL 건수. 그 달을 열어볼지 판단하는 신호다."""
+
+
 def _summary(content: TaxContent) -> PublicContentSummary:
     return PublicContentSummary(
         id=content.id,
@@ -121,12 +135,70 @@ def _public_query(tenant_id: UUID | None = None):
     )
 
 
+def _month_range(month: str) -> tuple[dt.date, dt.date]:
+    """`2026-07` → (2026-07-01, 2026-08-01)."""
+    try:
+        year, mon = (int(part) for part in month.split("-", 1))
+        start = dt.date(year, mon, 1)
+    except (ValueError, TypeError) as exc:
+        raise ValidationFailedError(
+            "month 는 YYYY-MM 형식이어야 합니다.", {"month": month}
+        ) from exc
+    end = dt.date(year + 1, 1, 1) if mon == 12 else dt.date(year, mon + 1, 1)
+    return start, end
+
+
+@router.get("/months", response_model=list[MonthBucket])
+def public_months(
+    db: DbSession,
+    tenant_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=36)] = 18,
+) -> list[MonthBucket]:
+    """월별 아카이브 (공포월 기준). 인증 없이 호출할 수 있다."""
+    bucket = func.to_char(TaxContent.promulgation_date, "YYYY-MM")
+    stmt = (
+        select(
+            bucket.label("month"),
+            func.count().label("count"),
+            func.count()
+            .filter(TaxContent.risk.in_([RiskLevel.HIGH, RiskLevel.CRITICAL]))
+            .label("important"),
+        )
+        .where(
+            TaxContent.workflow.in_(PUBLIC_STATES),
+            TaxContent.promulgation_date.is_not(None),
+        )
+        .group_by(bucket)
+        .order_by(bucket.desc())
+        .limit(limit)
+    )
+    stmt = stmt.where(
+        TaxContent.tenant_id.is_(None)
+        if tenant_id is None
+        else or_(TaxContent.tenant_id.is_(None), TaxContent.tenant_id == tenant_id)
+    )
+
+    out: list[MonthBucket] = []
+    for month, count, important in db.execute(stmt).all():
+        year, mon = month.split("-")
+        out.append(
+            MonthBucket(
+                month=month,
+                label=f"{year}년 {int(mon)}월",
+                count=count,
+                important=important,
+            )
+        )
+    return out
+
+
 @router.get("/feed", response_model=PublicFeed)
 def public_feed(
     db: DbSession,
     q: Annotated[str | None, Query(description="제목·요약 키워드")] = None,
     legal_status: Annotated[list[LegalStatus] | None, Query()] = None,
     risk_level: Annotated[list[RiskLevel] | None, Query()] = None,
+    month: Annotated[str | None, Query(description="공포월 YYYY-MM")] = None,
     effective_from: Annotated[dt.date | None, Query()] = None,
     effective_to: Annotated[dt.date | None, Query()] = None,
     deadline_within_days: Annotated[int | None, Query(ge=1, le=365)] = None,
@@ -138,6 +210,13 @@ def public_feed(
     """오늘의 브리핑 목록 (U-02). 인증 없이 호출할 수 있다."""
     today = today or dt.datetime.now(dt.UTC).date()
     stmt = _public_query(tenant_id)
+
+    if month:
+        start, end = _month_range(month)
+        stmt = stmt.where(
+            TaxContent.promulgation_date >= start,
+            TaxContent.promulgation_date < end,
+        )
 
     if q:
         pattern = f"%{q}%"
