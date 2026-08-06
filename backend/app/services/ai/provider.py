@@ -171,14 +171,21 @@ class StubProvider:
 def get_provider() -> AiProvider:
     """설정된 제공자를 돌려준다.
 
-    실제 제공자 어댑터는 계정 확보 후 여기에 추가한다. 어떤 제공자를 쓰든
-    출력은 validation.validate_output 을 반드시 통과해야 하며, 그 지점이
-    제공자 교체의 안전망이다.
+    어떤 제공자를 쓰든 출력은 validation.validate_output 을 반드시 통과해야 한다.
+    그 지점이 제공자 교체의 안전망이다 — 모델이 바뀌어도 §9.4 의 금지 규칙은 그대로 적용된다.
     """
     settings = get_settings()
+
     if settings.ai_provider == "stub":
         return StubProvider(settings.ai_model)
+
+    if settings.ai_provider == "groq":
+        # 순환 import 를 피하려고 여기서 가져온다.
+        from app.services.ai.groq_provider import GroqProvider
+
+        return GroqProvider()
+
     raise NotImplementedError(
-        f"AI 제공자 '{settings.ai_provider}' 어댑터가 아직 구현되지 않았습니다. "
-        "미결 항목 ⑨ (AI 모델 제공자 계정) 확정 후 추가하세요."
+        f"AI 제공자 '{settings.ai_provider}' 어댑터가 없습니다. "
+        "사용 가능: stub, groq"
     )

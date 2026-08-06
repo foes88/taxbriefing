@@ -44,9 +44,13 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
-    # AI (§9.5). MVP 기본값은 stub — 실제 제공자 계정은 미결 항목 ⑨.
+    # AI (§9.5). 사용 가능: stub | groq
+    #
+    # 모델 기본값은 실측으로 정했다. 같은 법령(법인세법 시행규칙)으로 비교했을 때
+    # llama-3.3-70b 는 이 시행규칙이 바꾸지 않은 조특법 내용을 바뀐 것처럼 요약했고,
+    # gpt-oss-120b 는 실제 변경분(별지 서식 교체)을 정확히 짚고 모르는 항목은 비워 두었다.
     ai_provider: str = "stub"
-    ai_model: str = "stub-analysis-v1"
+    ai_model: str = "openai/gpt-oss-120b"
     ai_api_key: str | None = None
     ai_prompt_version: str = "1.0.0"
 

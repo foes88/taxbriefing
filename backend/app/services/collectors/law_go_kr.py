@@ -15,6 +15,7 @@ AI가 "아마 내년 1월 1일 시행일 것"이라고 추측할 여지 자체�
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -256,12 +257,32 @@ def build_normalized_text(item: LawListItem, law: dict[str, Any]) -> str:
     return "\n".join(lines).strip()
 
 
+#: 법령 API 개정문에는 별표·서식 이미지가 <img> 태그로 섞여 온다.
+#: 그대로 두면 AI 입력 토큰만 잡아먹고 판단에는 보탬이 되지 않는다.
+_HTML_TAG = re.compile(r"<[^>]+>")
+_BLANK_RUN = re.compile(r"\n{3,}")
+
+
+def _strip_html(text: str) -> str:
+    """태그를 걷어내되 이미지가 있었다는 사실은 남긴다.
+
+    별표·서식이 이미지로만 제공되는 경우가 있어, 아예 지우면 검수자가
+    "왜 내용이 없지?" 하고 원문을 다시 찾아야 한다.
+    """
+    image_count = len(re.findall(r"<img\b", text, re.I))
+    cleaned = _HTML_TAG.sub("", text)
+    cleaned = _BLANK_RUN.sub("\n\n", cleaned).strip()
+    if image_count:
+        cleaned += f"\n(별표·서식 이미지 {image_count}건은 원문 링크에서 확인)"
+    return cleaned
+
+
 def _flatten_text(value: Any) -> str:
     """API 가 문자열·배열·중첩배열을 섞어서 준다. 전부 평문으로 편다."""
     if value is None:
         return ""
     if isinstance(value, str):
-        return value.strip()
+        return _strip_html(value) if "<" in value else value.strip()
     if isinstance(value, list):
         return "\n".join(part for part in (_flatten_text(v) for v in value) if part)
     if isinstance(value, dict):
