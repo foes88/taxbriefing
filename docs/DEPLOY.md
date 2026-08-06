@@ -140,10 +140,38 @@ https://taxbriefing.vercel.app,https://taxbriefing-git-main-foes88.vercel.app
 | Vercel `Deployment Blocked` — 커밋 이메일을 GitHub 계정과 매칭할 수 없음 | 아래 참조 |
 | Vercel 404 `DEPLOYMENT_NOT_FOUND` | 빌드 실패 또는 배포 차단으로 배포본이 없음 |
 | 사이트는 뜨는데 "정보를 불러오지 못했습니다" | `NEXT_PUBLIC_API_BASE` 미설정 또는 CORS 누락 |
+| 환경변수를 넣었는데 반영이 안 됨 | 아래 참조 |
 | 첫 요청이 1분 걸림 | Render 무료 절전. keep-alive 워크플로 확인 |
 | API 기동 실패 `could not load driver` | DB URL 에 `+psycopg` 누락 |
 | API 기동 실패 `JWT_SECRET must be at least 32 bytes` | 운영에서 짧은 비밀키 사용 |
 | 관리자 로그인 실패 | `RUN_SEED=1` 로 1회 배포했는지 확인 |
+
+### 환경변수를 넣었는데 반영되지 않을 때
+
+두 가지를 순서대로 확인한다.
+
+**1. Environments 범위**
+
+변수 추가 화면의 체크박스에서 **Production** 이 빠지면 실서비스에는 들어가지 않는다.
+Preview 에만 걸려 있으면 미리보기 URL 에서만 동작한다.
+
+**2. 재배포**
+
+Vercel 환경변수는 **이미 돌아가는 배포에 소급 적용되지 않는다.** 새 배포부터 적용된다.
+`Deployments → 맨 위 항목 ⋯ → Redeploy` 또는 커밋을 하나 더 올린다.
+
+증상으로 구분하는 법:
+
+```
+GET /            → 307 → /gate?reason=unset    변수를 못 봄
+POST /api/gate   → 503                          변수를 못 봄
+
+GET /            → 307 → /gate                  정상
+POST /api/gate   → 401 (틀린 비밀번호)          정상
+```
+
+`/gate` 에 직접 들어가 입력 화면이 보이는 것은 판단 근거가 되지 않는다.
+경고 문구는 `?reason=unset` 이 붙었을 때만 나오기 때문이다.
 
 ### 커밋 이메일이 GitHub 계정과 매칭되지 않을 때
 
