@@ -10,8 +10,17 @@ import type {
   TokenResponse,
 } from './types';
 
+/**
+ * API 주소.
+ *
+ * 서버 컴포넌트에서는 요청 시점에 읽히고, 클라이언트 번들에는 빌드 시점에 새겨진다.
+ * 그래서 배포 환경에서 값을 바꾸면 **재배포해야** 클라이언트에 반영된다.
+ */
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000/api/v1';
+
+/** 설정이 안 된 상태인지. 화면에 원인을 그대로 보여주기 위해 쓴다. */
+export const API_BASE_IS_DEFAULT = !process.env.NEXT_PUBLIC_API_BASE;
 
 export class ApiRequestError extends Error {
   constructor(

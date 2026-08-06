@@ -4,7 +4,7 @@ import { ContentRecord } from '@/components/ContentCard';
 import { FilterBar } from '@/components/FilterBar';
 import { Masthead } from '@/components/Masthead';
 import { MonthNav, MonthStrip } from '@/components/MonthNav';
-import { publicApi } from '@/lib/api';
+import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
 import { todayLabel } from '@/lib/format';
 import type { MonthBucket, PublicFeed } from '@/lib/types';
 
@@ -158,18 +158,34 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   );
 }
 
+/**
+ * 실패 화면은 **어디에 연결하려 했는지**를 보여준다.
+ * 그게 없으면 "환경변수를 확인하세요"만 반복하게 되고, 실제로 무엇이 잘못됐는지
+ * 알 수 없다. API 주소는 비밀이 아니므로 그대로 노출해도 된다.
+ */
 function ErrorState({ message }: { message: string }) {
   return (
     <div className="mt-4 border border-rule-strong bg-surface p-7">
       <p className="text-headline text-seal">정보를 불러오지 못했습니다</p>
       <p className="mt-2 text-[15px] text-ink-2">{message}</p>
-      <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
-        API 서버에 연결하지 못했습니다. 배포 환경이라면{' '}
-        <code className="bg-surface-sunk px-1.5 py-0.5 font-mono text-[12px]">
-          NEXT_PUBLIC_API_BASE
-        </code>{' '}
-        환경변수가 실제 백엔드 주소를 가리키는지 확인하세요.
-      </p>
+
+      <dl className="mt-5 border-t border-rule pt-4 text-[13px]">
+        <dt className="label">연결 시도한 주소</dt>
+        <dd className="mt-1.5 break-all font-mono text-[12.5px] text-ink">{API_BASE}</dd>
+      </dl>
+
+      {API_BASE_IS_DEFAULT ? (
+        <p className="mt-4 border-l-2 border-seal bg-surface-sunk px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">
+          <strong className="font-bold text-seal">NEXT_PUBLIC_API_BASE 가 설정되지 않았습니다.</strong>
+          <br />
+          배포 환경의 환경변수에 API 주소를 넣고(Production 체크) 재배포하세요.
+        </p>
+      ) : (
+        <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
+          주소는 설정돼 있으나 응답이 없습니다. API 서버가 켜져 있는지, 그리고 이 사이트
+          주소가 서버의 허용 목록(CORS)에 있는지 확인하세요.
+        </p>
+      )}
     </div>
   );
 }
