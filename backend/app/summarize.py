@@ -36,17 +36,35 @@ AI_BODY_KEYS = ("affected_users", "excluded_users", "changes", "business_impact"
                 "required_actions", "needs_expert")
 
 
+#: 화면에 그대로 나가면 안 되는 값. 모델이 null 을 준 것을 문자열로 굳힌 흔적이다.
+_PLACEHOLDER = {"none", "null", "n/a", "na", "-", "없음", "undefined"}
+
+
+def _clean(value: str | None) -> str:
+    """저장된 값에도 방어한다.
+
+    생성 쪽을 고쳐도 **이미 저장된 분석 결과**에는 "None" 이 남아 있고,
+    그것을 재사용할 때 다시 화면으로 나간다. 읽는 쪽에서도 막아야 한다.
+    """
+    text = (value or "").strip()
+    return "" if text.lower() in _PLACEHOLDER else text
+
+
+def _clean_list(values: list[str]) -> list[str]:
+    return [t for t in (_clean(v) for v in values) if t]
+
+
 def _to_body(output: AnalysisOutput) -> dict[str, list[str]]:
     """계약 스키마 출력을 화면이 읽는 본문 구조로 옮긴다."""
     return {
-        "affected_users": list(output.affected_users),
-        "excluded_users": list(output.excluded_users),
-        "changes": [item.text for item in output.changes],
-        "business_impact": [item.text for item in output.business_impact],
-        "required_actions": [item.text for item in output.required_actions],
+        "affected_users": _clean_list(list(output.affected_users)),
+        "excluded_users": _clean_list(list(output.excluded_users)),
+        "changes": _clean_list([item.text for item in output.changes]),
+        "business_impact": _clean_list([item.text for item in output.business_impact]),
+        "required_actions": _clean_list([item.text for item in output.required_actions]),
         # 경고는 "전문가 확인이 필요한 항목"으로 보여준다 — 사업자에게는
         # 내부 코드보다 "무엇을 더 확인해야 하는가"가 필요하다.
-        "needs_expert": [w.message for w in output.warnings],
+        "needs_expert": _clean_list([w.message for w in output.warnings]),
     }
 
 
@@ -122,9 +140,10 @@ def run(
         body["_ai"] = True
         version.body = body
 
-        # 한 줄 요약과 주제는 콘텐츠 레벨에도 반영한다 (목록에 보이는 값).
-        if result.output.one_line_summary:
-            content.one_line_summary = result.output.one_line_summary[:250]
+        # 한 줄 요약은 콘텐츠 레벨에도 반영한다 (목록에 보이는 값).
+        summary = _clean(result.output.one_line_summary)
+        if summary:
+            content.one_line_summary = summary[:250]
 
         # 건별로 커밋한다. 수십 건을 돌리는 작업이라 마지막에 한 번만 저장하면
         # 중간에 끊겼을 때 이미 지불한 API 호출이 통째로 날아간다.
