@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 디자인 근거: 이 서비스가 다루는 것은 관보와 법령 원문이다.
+ * 그 세계의 재료 — 공포일·시행일·문서번호·인장 — 를 그대로 화면 언어로 쓴다.
+ *
+ * 강조색은 인주(印朱) 빨강 하나뿐이다. 제호 규칙선과 확정 도장에만 쓴다.
+ * 정책 상태를 나르는 색(초록·파랑·호박)은 강조가 아니라 **신호**이므로 따로 둔다.
+ */
+:root {
+  --paper: #f5f6f8;
+  --surface: #ffffff;
+  --surface-sunk: #f0f2f5;
+
+  --ink: #171a21;
+  --ink-2: #545c6b;
+  --ink-3: #949ba8;
+  --rule: #e2e5ea;
+  --rule-strong: #c8cdd6;
+
+  --seal: #a8332a;
+
+  /* 상태 신호 — 강조색과 독립적으로 움직인다 */
+  --state-effective: #0f7b54;
+  --state-confirmed: #1d4e89;
+  --state-pending: #9a6300;
+  --state-halted: #a8332a;
+  --state-unknown: #6b7280;
+}
+
+/*
+ * 다크 모드는 두지 않는다.
+ * 이 디자인은 종이(관보) 위의 먹과 인장을 전제로 잡았다. 색을 뒤집으면
+ * 채운 도장/빈 도장의 대비도, 인주색의 무게도 근거를 잃는다.
+ * 단일 테마는 누락이 아니라 선택이다.
+ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    /* 한국어는 줄간격이 넉넉하고 어절 단위로 끊겨야 읽힌다. */
+    line-height: 1.72;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--seal);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--seal) 18%, transparent);
+  }
+}
+
+@layer components {
+  /*
+   * 도장. 관보에서 확정 사실을 표시하는 방식이다.
+   * 둥근 알약 대신 각진 테두리 + 넓은 자간으로 '찍힌 것'처럼 보이게 한다.
+   */
+  .seal {
+    @apply inline-flex items-center whitespace-nowrap border px-[7px] py-[3px] text-[10.5px] font-bold leading-none;
+    letter-spacing: 0.06em;
+    border-radius: 2px;
+  }
+
+  /* 목록·상세의 날짜 거터. 관보 색인의 좌측 일자 열에서 왔다. */
+  .gutter-date {
+    @apply text-[11px] font-semibold leading-none;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .label {
+    @apply text-[10.5px] font-bold uppercase leading-none;
+    letter-spacing: 0.11em;
+    color: var(--ink-3);
+  }
+
+  .rule {
+    border-color: var(--rule);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2.5 text-[13.5px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40;
+    border-radius: 3px;
+  }
+  .btn-primary {
+    @apply btn text-white;
+    background: var(--ink);
+  }
+  .btn-quiet {
+    @apply btn border;
+    border-color: var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .btn-quiet:hover {
+    background: var(--surface-sunk);
+  }
+
+  .prose-block + .prose-block {
+    @apply mt-8;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

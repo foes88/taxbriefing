@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taxbriefing.example/schemas/analysis-output-v1.json",
+  "title": "TaxBriefing AI Analysis Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "title",
+    "one_line_summary",
+    "legal_status",
+    "affected_users",
+    "changes",
+    "business_impact",
+    "required_actions",
+    "risk_level",
+    "topics",
+    "warnings",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "one_line_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 250
+    },
+    "legal_status": {
+      "enum": [
+        "DISCUSSION",
+        "BILL_PROPOSED",
+        "PREANNOUNCED",
+        "GOV_ANNOUNCED",
+        "ASSEMBLY_PASSED",
+        "PROMULGATED",
+        "EFFECTIVE",
+        "SUSPENDED",
+        "ABOLISHED",
+        "UNKNOWN"
+      ]
+    },
+    "announcement_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "promulgation_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "effective_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "application_period": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "start": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "end": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "affected_users": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30
+    },
+    "excluded_users": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/grounded_item"
+      },
+      "maxItems": 20
+    },
+    "business_impact": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/grounded_item"
+      },
+      "maxItems": 20
+    },
+    "required_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action_item"
+      },
+      "maxItems": 20
+    },
+    "deadlines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "date",
+          "evidence_ids"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "risk_level": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "related_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "grounded_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "evidence_ids"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "action_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "urgency",
+        "evidence_ids"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "urgency": {
+          "enum": [
+            "NOW",
+            "BEFORE_DEADLINE",
+            "MONITOR",
+            "ASK_EXPERT"
+          ]
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_version_id",
+        "locator",
+        "support_type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source_version_id": {
+          "type": "string"
+        },
+        "locator": {
+          "type": "string",
+          "description": "page/paragraph/offset locator"
+        },
+        "support_type": {
+          "enum": [
+            "DIRECT",
+            "INFERRED",
+            "CONFLICT"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

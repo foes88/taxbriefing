@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# 환경변수 — 비밀키는 절대 커밋하지 않는다 (§12.1)
+.env
+.env.*
+!.env.example
+
+# Node / Next.js (프론트엔드 착수 시)
+node_modules/
+.next/
+out/
+.vercel/
+
+# 로컬 데이터
+*.db
+*.sqlite3
+
+# OS / 편집기
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

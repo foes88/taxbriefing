@@ -1,0 +1,344 @@
+openapi: 3.1.0
+info:
+  title: TaxBriefing API
+  version: 1.0.0-draft
+  description: Official-source tax and policy briefing platform API draft.
+servers:
+  - url: https://api.example.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /sources:
+    get:
+      tags: [Sources]
+      summary: List source registry
+      responses:
+        '200':
+          description: Source list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Source'}
+    post:
+      tags: [Sources]
+      summary: Create source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SourceCreate'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Source'}
+  /sources/{sourceId}/runs:
+    post:
+      tags: [Sources]
+      summary: Start an ingestion run
+      parameters:
+        - {$ref: '#/components/parameters/SourceId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202':
+          description: Accepted
+  /raw-contents:
+    get:
+      tags: [RawContent]
+      summary: Search collected originals
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: source_id, in: query, schema: {type: string, format: uuid}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Page
+  /raw-contents/manual:
+    post:
+      tags: [RawContent]
+      summary: Register an official source manually
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_id,title,canonical_url,publisher,normalized_text]
+              properties:
+                source_id: {type: string, format: uuid}
+                title: {type: string}
+                canonical_url: {type: string, format: uri}
+                publisher: {type: string}
+                published_at: {type: [string,'null'], format: date-time}
+                normalized_text: {type: string}
+      responses:
+        '201': {description: Created}
+  /analyses:
+    post:
+      tags: [AI]
+      summary: Request grounded AI analysis
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy_cluster_id, source_version_ids]
+              properties:
+                policy_cluster_id: {type: string, format: uuid}
+                source_version_ids:
+                  type: array
+                  minItems: 1
+                  items: {type: string, format: uuid}
+                prompt_version: {type: string, default: '1.0.0'}
+      responses:
+        '202': {description: Accepted}
+  /contents:
+    post:
+      tags: [Contents]
+      summary: Create business-facing content draft
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContentCreate'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Content'}
+  /contents/{contentId}:
+    get:
+      tags: [Contents]
+      summary: Get content with sources and evidence
+      parameters: [{$ref: '#/components/parameters/ContentId'}]
+      responses:
+        '200':
+          description: Content
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Content'}
+    patch:
+      tags: [Contents]
+      summary: Edit content; approved content returns to review when protected fields change
+      parameters:
+        - {$ref: '#/components/parameters/ContentId'}
+        - {name: If-Match, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: true}
+      responses:
+        '200': {description: Updated}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /contents/{contentId}/reviews:
+    post:
+      tags: [Review]
+      summary: Approve or reject a content version
+      parameters:
+        - {$ref: '#/components/parameters/ContentId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewRequest'}
+      responses:
+        '201': {description: Review recorded}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /contents/{contentId}/corrections:
+    post:
+      tags: [Corrections]
+      summary: Create a correction linked to a published content version
+      parameters:
+        - {$ref: '#/components/parameters/ContentId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '201': {description: Correction draft created}
+  /feed:
+    get:
+      tags: [Subscriber]
+      summary: Personalized briefing feed
+      parameters:
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: importance, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Feed page}
+  /me/business-profile:
+    put:
+      tags: [Subscriber]
+      summary: Replace business profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BusinessProfile'}
+      responses:
+        '200': {description: Updated}
+  /campaigns:
+    post:
+      tags: [Campaigns]
+      summary: Create campaign draft
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CampaignCreate'}
+      responses:
+        '201': {description: Created}
+  /campaigns/{campaignId}/preview:
+    post:
+      tags: [Campaigns]
+      summary: Preview audience and channel messages
+      parameters:
+        - {name: campaignId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Preview}
+  /campaigns/{campaignId}/schedule:
+    post:
+      tags: [Campaigns]
+      summary: Schedule approved campaign
+      parameters:
+        - {name: campaignId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {description: Scheduled}
+  /consultations:
+    post:
+      tags: [Consultations]
+      summary: Submit consultation request with content context
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '201': {description: Created}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 128}
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ContentId:
+      name: contentId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Conflict:
+      description: Version conflict or duplicate request
+    ValidationError:
+      description: Source/evidence/review gate failed
+  schemas:
+    SourceCreate:
+      type: object
+      additionalProperties: false
+      required: [display_name,canonical_domain,authority,collector_type]
+      properties:
+        display_name: {type: string}
+        canonical_domain: {type: string}
+        authority: {enum: [A,B,C,D]}
+        collector_type: {enum: [API,RSS,HTML,EMAIL,MANUAL]}
+        schedule_cron: {type: [string,'null']}
+        settings: {type: object}
+    Source:
+      allOf:
+        - {$ref: '#/components/schemas/SourceCreate'}
+        - type: object
+          properties:
+            id: {type: string, format: uuid}
+            status: {type: string}
+            last_success_at: {type: [string,'null'], format: date-time}
+    ContentCreate:
+      type: object
+      additionalProperties: false
+      required: [policy_cluster_id,title,legal_status,risk_level,source_version_ids]
+      properties:
+        policy_cluster_id: {type: string, format: uuid}
+        title: {type: string, maxLength: 120}
+        legal_status: {$ref: '#/components/schemas/LegalStatus'}
+        risk_level: {$ref: '#/components/schemas/RiskLevel'}
+        source_version_ids:
+          type: array
+          minItems: 1
+          items: {type: string, format: uuid}
+        body: {type: object}
+    Content:
+      allOf:
+        - {$ref: '#/components/schemas/ContentCreate'}
+        - type: object
+          properties:
+            id: {type: string, format: uuid}
+            workflow_status: {$ref: '#/components/schemas/WorkflowStatus'}
+            source_confidence: {type: integer, minimum: 0, maximum: 100}
+            version: {type: integer}
+            evidence: {type: array, items: {type: object}}
+    ReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [decision,review_note,checked_source_version_ids]
+      properties:
+        decision: {enum: [APPROVE,APPROVE_WITH_EDIT,REJECT]}
+        review_note: {type: string}
+        legal_status: {$ref: '#/components/schemas/LegalStatus'}
+        risk_level: {$ref: '#/components/schemas/RiskLevel'}
+        checked_source_version_ids:
+          type: array
+          minItems: 1
+          items: {type: string, format: uuid}
+    BusinessProfile:
+      type: object
+      additionalProperties: false
+      required: [business_type]
+      properties:
+        business_type: {type: string}
+        tax_type: {type: [string,'null']}
+        industry_codes: {type: array, items: {type: string}}
+        region_codes: {type: array, items: {type: string}}
+        employee_band: {type: [string,'null']}
+        revenue_band: {type: [string,'null']}
+        interest_topics: {type: array, items: {type: string}}
+    CampaignCreate:
+      type: object
+      additionalProperties: false
+      required: [campaign_type,name,audience_filter,channels,content_version_ids]
+      properties:
+        campaign_type: {enum: [URGENT,DAILY,WEEKLY,DEADLINE,CORRECTION]}
+        name: {type: string}
+        audience_filter: {type: object}
+        channels:
+          type: array
+          minItems: 1
+          items: {enum: [EMAIL,KAKAO,SMS,WEB]}
+        content_version_ids:
+          type: array
+          minItems: 1
+          items: {type: string, format: uuid}
+        scheduled_at: {type: [string,'null'], format: date-time}
+    LegalStatus:
+      enum: [DISCUSSION,BILL_PROPOSED,PREANNOUNCED,GOV_ANNOUNCED,ASSEMBLY_PASSED,PROMULGATED,EFFECTIVE,SUSPENDED,ABOLISHED,UNKNOWN]
+    WorkflowStatus:
+      enum: [DETECTED,UNVERIFIED,SOURCE_CONFIRMED,ANALYZED,REVIEW_PENDING,APPROVED,SCHEDULED,PUBLISHED,MONITORING,CORRECTED,SUPERSEDED,ARCHIVED]
+    RiskLevel:
+      enum: [LOW,MEDIUM,HIGH,CRITICAL]
