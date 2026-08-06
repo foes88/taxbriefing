@@ -32,14 +32,30 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * 공개 조회는 60초 캐시한다.
+ *
+ * 브리핑은 초 단위로 바뀌는 데이터가 아니고, 요청 경로가 길수록
+ * (브라우저 → Vercel → API → DB) 왕복 비용이 그대로 체감된다.
+ * 관리자 화면은 방금 저장한 내용을 즉시 봐야 하므로 캐시하지 않는다.
+ */
+const PUBLIC_CACHE_SECONDS = 60;
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options: { cacheSeconds?: number } = {},
+): Promise<T> {
+  const { cacheSeconds } = options;
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
-    cache: 'no-store',
+    ...(cacheSeconds
+      ? { next: { revalidate: cacheSeconds } }
+      : { cache: 'no-store' as RequestCache }),
   });
 
   if (!response.ok) {
@@ -93,9 +109,19 @@ function toQuery(filters: FeedFilters): string {
 }
 
 export const publicApi = {
-  feed: (filters: FeedFilters = {}) => request<PublicFeed>(`/public/feed?${toQuery(filters)}`),
-  content: (id: string) => request<PublicContentDetail>(`/public/contents/${id}`),
-  months: () => request<MonthBucket[]>('/public/months'),
+  feed: (filters: FeedFilters = {}) =>
+    request<PublicFeed>(`/public/feed?${toQuery(filters)}`, undefined, {
+      cacheSeconds: PUBLIC_CACHE_SECONDS,
+    }),
+  content: (id: string) =>
+    request<PublicContentDetail>(`/public/contents/${id}`, undefined, {
+      cacheSeconds: PUBLIC_CACHE_SECONDS,
+    }),
+  months: () =>
+    request<MonthBucket[]>('/public/months', undefined, {
+      // 월 목록은 하루에 몇 번 바뀔까 말까다.
+      cacheSeconds: 300,
+    }),
 };
 
 /* ---------------------------------------------------------------- 관리자 */

@@ -77,7 +77,7 @@ export function MonthNav({ months, active }: { months: MonthBucket[]; active?: s
           }`}
         >
           <span className="text-[13.5px]">전체 기간</span>
-          <span className="tabular text-[12px] text-ink-3">{total}</span>
+          <span className="tabular text-[12px] text-ink-3">{total}건</span>
         </button>
 
         {years.map((group) => (
@@ -86,14 +86,7 @@ export function MonthNav({ months, active }: { months: MonthBucket[]; active?: s
               <span className="tabular text-[12px] font-extrabold tracking-tight text-ink">
                 {group.year}년
               </span>
-              <span className="flex items-baseline gap-1.5">
-                {group.important > 0 ? (
-                  <span className="tabular text-[10.5px] font-bold text-seal">
-                    중요 {group.important}
-                  </span>
-                ) : null}
-                <span className="tabular text-[11px] text-ink-3">{group.count}</span>
-              </span>
+              <Counts important={group.important} total={group.count} />
             </h3>
 
             <ul className="divide-y divide-rule">
@@ -106,6 +99,9 @@ export function MonthNav({ months, active }: { months: MonthBucket[]; active?: s
                       type="button"
                       onClick={() => go(m.month)}
                       aria-current={on ? 'true' : undefined}
+                      aria-label={`${group.year}년 ${monthNo}월, 전체 ${m.count}건${
+                        m.important > 0 ? `, 중요 ${m.important}건` : ''
+                      }`}
                       className={`flex w-full items-baseline justify-between gap-2 py-2 pl-6 pr-4 text-left transition-colors ${
                         on
                           ? 'bg-surface-sunk font-bold text-ink'
@@ -113,17 +109,7 @@ export function MonthNav({ months, active }: { months: MonthBucket[]; active?: s
                       }`}
                     >
                       <span className="tabular text-[13.5px]">{monthNo}월</span>
-                      <span className="flex shrink-0 items-baseline gap-1.5">
-                        {m.important > 0 ? (
-                          <span
-                            className="tabular text-[10.5px] font-bold text-seal"
-                            title={`중요 이상 ${m.important}건`}
-                          >
-                            !{m.important}
-                          </span>
-                        ) : null}
-                        <span className="tabular text-[12px] text-ink-3">{m.count}</span>
-                      </span>
+                      <Counts important={m.important} total={m.count} />
                     </button>
                   </li>
                 );
@@ -168,6 +154,24 @@ export function MonthStrip({ months, active }: { months: MonthBucket[]; active?:
         );
       })}
     </div>
+  );
+}
+
+/**
+ * 건수 표기.
+ *
+ * 숫자 두 개가 나란히 있으면 무엇이 무엇인지 알 수 없다. 그래서 각각에 말을 붙이고,
+ * 연도 줄과 월 줄에서 **같은 표기**를 쓴다. 기호(`!3`)는 쓰지 않는다 —
+ * 만든 사람만 아는 약속이기 때문이다.
+ */
+function Counts({ important, total }: { important: number; total: number }) {
+  return (
+    <span className="flex shrink-0 items-baseline gap-2">
+      {important > 0 ? (
+        <span className="tabular text-[11px] font-bold text-seal">중요 {important}</span>
+      ) : null}
+      <span className="tabular text-[12px] text-ink-3">{total}건</span>
+    </span>
   );
 }
 
