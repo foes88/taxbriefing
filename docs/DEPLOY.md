@@ -137,9 +137,37 @@ https://taxbriefing.vercel.app,https://taxbriefing-git-main-foes88.vercel.app
 
 | 증상 | 원인 |
 | --- | --- |
-| Vercel 404 `DEPLOYMENT_NOT_FOUND` | 빌드 실패로 배포본이 없음. 빌드 로그 확인 |
+| Vercel `Deployment Blocked` — 커밋 이메일을 GitHub 계정과 매칭할 수 없음 | 아래 참조 |
+| Vercel 404 `DEPLOYMENT_NOT_FOUND` | 빌드 실패 또는 배포 차단으로 배포본이 없음 |
 | 사이트는 뜨는데 "정보를 불러오지 못했습니다" | `NEXT_PUBLIC_API_BASE` 미설정 또는 CORS 누락 |
 | 첫 요청이 1분 걸림 | Render 무료 절전. keep-alive 워크플로 확인 |
 | API 기동 실패 `could not load driver` | DB URL 에 `+psycopg` 누락 |
 | API 기동 실패 `JWT_SECRET must be at least 32 bytes` | 운영에서 짧은 비밀키 사용 |
 | 관리자 로그인 실패 | `RUN_SEED=1` 로 1회 배포했는지 확인 |
+
+### 커밋 이메일이 GitHub 계정과 매칭되지 않을 때
+
+Vercel 은 배포하려는 커밋의 작성자 이메일이 GitHub 계정에 등록돼 있는지 확인한다.
+등록되지 않은 주소로 커밋하면 빌드조차 시작하지 않고 차단한다.
+
+```
+Deployment Blocked
+The deployment was blocked because the commit email ... could not be matched
+to a GitHub account.
+```
+
+**이 저장소의 커밋 신원을 계정 이메일로 맞춘다.**
+
+```bash
+git config user.name  "Jinhan Bae"
+git config user.email "foes88@gmail.com"     # GitHub 계정에 등록된 주소
+```
+
+전역이 아니라 저장소 단위(`--global` 없이)로 두면 다른 프로젝트에 영향이 없다.
+
+이미 잘못된 이메일로 쌓인 커밋이 있으면, 올바른 이메일로 **새 커밋을 하나 더 올리면**
+그 커밋 기준으로 배포가 진행된다. 과거 커밋까지 정리하려면 히스토리 재작성이 필요하므로
+협업자가 없을 때만 한다.
+
+GitHub 에 여러 이메일을 쓰고 있다면 **Settings → Emails** 에서 해당 주소를 추가·인증하는
+방법도 있다. 공개하고 싶지 않으면 `{id}+{login}@users.noreply.github.com` 를 쓰면 된다.
