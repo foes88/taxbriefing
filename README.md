@@ -32,8 +32,12 @@
 | [`docs/COLLECTION-STRATEGY.md`](docs/COLLECTION-STRATEGY.md) | 수집 경로 — 공식 OPEN API 활용 방안 |
 | [`docs/API-SIGNUP-GUIDE.md`](docs/API-SIGNUP-GUIDE.md) | 어디서 어떤 API를 신청하는가 |
 | [`docs/OPEN-DECISIONS.md`](docs/OPEN-DECISIONS.md) | 사람이 결정해야 하는 미결 항목 |
+| [`docs/WEB.md`](docs/WEB.md) | 웹 화면 구성과 디자인 원칙 |
 | [`backend/`](backend/) | FastAPI + PostgreSQL API 서버 |
-| [`frontend/`](frontend/) | Next.js 공개 사이트 + 관리자 화면 |
+| `app/` `components/` `lib/` | Next.js 공개 사이트 + 관리자 화면 |
+
+> 웹 앱은 **저장소 루트**에 있다. Vercel이 별도 설정 없이 인식하게 하기 위해서다 (ADR-004).
+> 백엔드는 `backend/` 에 있고 별도 호스트에 배포한다.
 
 ## 실행
 
@@ -48,11 +52,19 @@ cp .env.example .env                      # TAXBRIEFING_LAW_API_OC 설정
 .venv/Scripts/python -m alembic upgrade head
 .venv/Scripts/python -m app.seed          # 출처·태그·관리자 계정
 .venv/Scripts/python -m app.collect       # 법령 원문 수집
+.venv/Scripts/python -m app.bulk_draft --auto-approve   # 로컬: 수집분 게시
 .venv/Scripts/python -m uvicorn app.main:app --reload
 
-# 3. 프론트엔드
-cd ../frontend && npm install && npm run dev
+# 3. 웹 (저장소 루트에서)
+cd .. && npm install && npm run dev
 ```
+
+## 배포 환경변수 (Vercel)
+
+| 이름 | 용도 |
+| --- | --- |
+| `SITE_PASSWORD` | 사이트 접근 비밀번호. **미설정 시 운영에서는 열리지 않는다** |
+| `NEXT_PUBLIC_API_BASE` | 백엔드 주소 + `/api/v1` |
 
 | | 주소 |
 | --- | --- |

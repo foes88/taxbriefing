@@ -14,11 +14,12 @@ htmlcov/
 .env.*
 !.env.example
 
-# Node / Next.js (프론트엔드 착수 시)
+# Node / Next.js
 node_modules/
 .next/
 out/
 .vercel/
+*.tsbuildinfo
 
 # 로컬 데이터
 *.db
