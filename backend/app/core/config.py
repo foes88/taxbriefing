@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     # 표시 시간대. 저장은 UTC, 표시는 Asia/Seoul (§8.1).
     display_timezone: str = "Asia/Seoul"
 
+    # 웹이 별도 호스트에 배포되므로 교차 출처 호출이 된다 (ADR-004).
+    # 쉼표로 구분한 정확한 오리진만 허용한다 — 와일드카드는 쓰지 않는다.
+    cors_origins: str = "http://localhost:3000,http://localhost:3100"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     # AI (§9.5). MVP 기본값은 stub — 실제 제공자 계정은 미결 항목 ⑨.
     ai_provider: str = "stub"
     ai_model: str = "stub-analysis-v1"

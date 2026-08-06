@@ -19,6 +19,7 @@ COPY backend ./backend
 COPY docs/contracts ./docs/contracts
 
 WORKDIR /app/backend
+RUN chmod +x entrypoint.sh
 
 # 컨테이너는 비루트로 돈다.
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app
@@ -26,9 +27,7 @@ USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"
 
-# 마이그레이션은 배포 파이프라인에서 별도로 돌린다 — 여러 인스턴스가 동시에
-# alembic upgrade 를 실행하면 서로 잠금을 물기 때문이다.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["./entrypoint.sh"]

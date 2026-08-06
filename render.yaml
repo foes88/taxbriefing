@@ -1,0 +1,53 @@
+# Render 블루프린트 — 백엔드 API (무료 티어)
+#
+# 사용법
+#   1. https://render.com 가입 (카드 불필요)
+#   2. New → Blueprint → 이 저장소 선택
+#   3. 아래 sync:false 항목만 채우면 나머지는 자동 생성된다
+#
+# DB 는 Render 무료 Postgres 가 90일 후 만료되므로 Neon(영구 무료)을 권장한다.
+# TAXBRIEFING_DATABASE_URL 에 Neon 접속 문자열을 넣는다.
+services:
+  - type: web
+    name: taxbriefing-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    # 계약 파일(docs/contracts)을 이미지에 넣어야 하므로 컨텍스트는 저장소 루트다.
+    dockerContext: .
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TAXBRIEFING_ENVIRONMENT
+        value: production
+
+      # Neon 등에서 발급받은 접속 문자열.
+      # 드라이버 접두어가 필요하다: postgresql+psycopg://...
+      - key: TAXBRIEFING_DATABASE_URL
+        sync: false
+
+      # HS256 은 32바이트 이상을 요구한다. Render 가 안전한 값을 만들어 준다.
+      - key: TAXBRIEFING_JWT_SECRET
+        generateValue: true
+
+      # Vercel 사이트 주소. 쉼표로 여러 개 넣을 수 있다.
+      # 예: https://taxbriefing.vercel.app
+      - key: TAXBRIEFING_CORS_ORIGINS
+        sync: false
+
+      # 국가법령정보 OPEN API 식별자 (open.law.go.kr 에서 직접 지정한 값)
+      - key: TAXBRIEFING_LAW_API_OC
+        sync: false
+
+      # 기동 시 마이그레이션 실행. 인스턴스가 1개인 무료 티어에서만 안전하다.
+      - key: RUN_MIGRATIONS
+        value: "1"
+
+      # 최초 1회만 "1" 로 두어 출처·태그·관리자 계정을 만든 뒤 "0" 으로 되돌린다.
+      - key: RUN_SEED
+        value: "0"
+
+      # 초기 관리자 비밀번호. 운영에서는 반드시 지정한다 (미지정 시 임의 생성됨).
+      - key: TAXBRIEFING_SEED_ADMIN_PASSWORD
+        sync: false

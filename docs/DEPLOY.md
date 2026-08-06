@@ -1,0 +1,145 @@
+# 배포 가이드 (무료 구성)
+
+> 관련: [ADR-004 배포 분리](DECISIONS.md)
+
+```
+Vercel (웹)  ──HTTPS──▶  Render (API)  ──▶  Neon (PostgreSQL)
+   무료                    무료                무료
+```
+
+셋 다 **카드 없이** 시작할 수 있다.
+
+| | 서비스 | 무료 조건 |
+| --- | --- | --- |
+| 웹 | Vercel | Hobby 플랜. 개인 프로젝트 무료 |
+| API | Render | 월 750 인스턴스시간. 15분 무요청 시 절전 |
+| DB | Neon | 영구 무료 티어. 저장 용량·컴퓨트 제한 있음 |
+
+> **Render 무료의 절전이 유일한 실질 제약이다.** 15분간 요청이 없으면 잠들고,
+> 다음 요청에서 깨어나는 데 30~60초가 걸린다. 아침에 첫 방문자가 기다리게 된다.
+> 아래 keep-alive 워크플로로 해결한다.
+>
+> Render 무료 Postgres 는 **90일 후 만료**된다. 그래서 DB 는 Neon 을 쓴다.
+
+---
+
+## 1. Neon — 데이터베이스
+
+1. https://neon.tech 가입 → 프로젝트 생성 (리전은 `Asia Pacific (Singapore)`)
+2. 대시보드에서 **Connection string** 복사
+3. **접두어를 바꾼다.** Neon 은 `postgresql://` 을 주는데 이 프로젝트는 psycopg 드라이버를 쓴다.
+
+```
+받은 값 : postgresql://user:pw@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+넣을 값 : postgresql+psycopg://user:pw@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+                      ^^^^^^^ 이 부분을 추가
+```
+
+접두어를 빠뜨리면 기동 시 드라이버를 찾지 못해 실패한다.
+
+---
+
+## 2. Render — API
+
+1. https://render.com 가입
+2. **New → Blueprint** → 이 저장소 선택 → `render.yaml` 자동 인식
+3. 아래 값을 입력한다.
+
+| 환경변수 | 값 |
+| --- | --- |
+| `TAXBRIEFING_DATABASE_URL` | 위에서 만든 Neon 문자열 (`postgresql+psycopg://…`) |
+| `TAXBRIEFING_CORS_ORIGINS` | `https://taxbriefing.vercel.app` |
+| `TAXBRIEFING_LAW_API_OC` | `taxbriefing` |
+| `TAXBRIEFING_SEED_ADMIN_PASSWORD` | 관리자 비밀번호 (기본값 금지) |
+
+`TAXBRIEFING_JWT_SECRET` 은 Render 가 자동 생성한다.
+
+4. 첫 배포에서 **`RUN_SEED` 를 `1`** 로 바꿔 출처·태그·관리자 계정을 만든다.
+   배포가 끝나면 **다시 `0`** 으로 되돌린다.
+
+5. 배포된 주소를 확인한다 — `https://taxbriefing-api.onrender.com`
+
+```bash
+curl https://taxbriefing-api.onrender.com/health
+# {"status":"ok","environment":"production"}
+```
+
+### CORS 를 잊지 말 것
+
+`TAXBRIEFING_CORS_ORIGINS` 에 Vercel 주소가 없으면 웹에서 API 호출이 브라우저에 막힌다.
+증상은 "정보를 불러오지 못했습니다" 이고, 서버 로그에는 아무것도 남지 않는다.
+
+여러 주소를 쓸 때는 쉼표로 나열한다. 와일드카드(`*`)는 쓰지 않는다.
+
+```
+https://taxbriefing.vercel.app,https://taxbriefing-git-main-foes88.vercel.app
+```
+
+---
+
+## 3. Vercel — 웹
+
+웹 앱은 **저장소 루트**에 있으므로 Root Directory 설정이 필요 없다.
+
+**Settings → Environment Variables**
+
+| 이름 | 값 |
+| --- | --- |
+| `SITE_PASSWORD` | 사이트 접근 비밀번호 |
+| `NEXT_PUBLIC_API_BASE` | `https://taxbriefing-api.onrender.com/api/v1` |
+
+> `SITE_PASSWORD` 를 넣지 않으면 운영에서 사이트가 열리지 않는다.
+> 설정을 깜빡했을 때 아무나 들어오는 것보다 낫다고 판단해 그렇게 만들었다.
+
+`NEXT_PUBLIC_` 접두어가 붙은 값은 **브라우저에 노출된다.** API 주소는 공개돼도 되지만,
+비밀은 절대 이 접두어로 넣지 않는다.
+
+환경변수를 바꾸면 **재배포해야** 반영된다.
+
+---
+
+## 4. 자동화 — GitHub Actions
+
+`.github/workflows/` 에 세 개가 있다. 저장소 **Settings → Secrets and variables → Actions** 에 등록한다.
+
+| Secret | 용도 |
+| --- | --- |
+| `API_BASE_URL` | `https://taxbriefing-api.onrender.com` |
+| `API_ADMIN_ID` | 관리자 아이디 |
+| `API_ADMIN_PASSWORD` | 관리자 비밀번호 |
+
+| 워크플로 | 주기 | 하는 일 |
+| --- | --- | --- |
+| `keep-alive.yml` | 10분 | `/health` 호출로 절전 방지 |
+| `collect.yml` | 평일 09·13·17시(KST) | 법령 원문 수집 |
+
+수집은 API 를 통해 트리거하지 않고 Render 의 **Cron Job** 으로 돌리는 편이 낫지만,
+무료 티어에는 Cron Job 이 없다. 그래서 GitHub Actions 에서 호출한다.
+
+---
+
+## 순서 요약
+
+```
+1. Neon 프로젝트 생성 → 접속 문자열 (postgresql+psycopg:// 로 수정)
+2. Render Blueprint 배포 → 환경변수 입력 → RUN_SEED=1 로 1회 → 0 으로 복귀
+3. Render 주소 확인 (/health 200)
+4. Vercel 환경변수에 SITE_PASSWORD, NEXT_PUBLIC_API_BASE 입력 → 재배포
+5. Render 의 TAXBRIEFING_CORS_ORIGINS 에 Vercel 주소 입력 → 재배포
+6. GitHub Secrets 등록
+```
+
+4번과 5번은 서로를 참조하므로 **양쪽 주소가 다 나온 뒤에** 채워야 한다.
+
+---
+
+## 흔한 실패
+
+| 증상 | 원인 |
+| --- | --- |
+| Vercel 404 `DEPLOYMENT_NOT_FOUND` | 빌드 실패로 배포본이 없음. 빌드 로그 확인 |
+| 사이트는 뜨는데 "정보를 불러오지 못했습니다" | `NEXT_PUBLIC_API_BASE` 미설정 또는 CORS 누락 |
+| 첫 요청이 1분 걸림 | Render 무료 절전. keep-alive 워크플로 확인 |
+| API 기동 실패 `could not load driver` | DB URL 에 `+psycopg` 누락 |
+| API 기동 실패 `JWT_SECRET must be at least 32 bytes` | 운영에서 짧은 비밀키 사용 |
+| 관리자 로그인 실패 | `RUN_SEED=1` 로 1회 배포했는지 확인 |

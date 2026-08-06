@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
@@ -28,6 +29,19 @@ app = FastAPI(
 
 app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
 app.add_exception_handler(RequestValidationError, validation_error_handler)  # type: ignore[arg-type]
+
+# 웹은 Vercel, API 는 별도 호스트라 교차 출처 호출이 된다 (ADR-004).
+# allow_credentials 는 켜지 않는다 — 관리자 토큰은 쿠키가 아니라 Authorization 헤더로 오고,
+# 쿠키를 함께 허용하면 CSRF 표면이 넓어진다.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"],
+    expose_headers=["X-Trace-Id"],
+    max_age=600,
+)
 
 
 @app.middleware("http")

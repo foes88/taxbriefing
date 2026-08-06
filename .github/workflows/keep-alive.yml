@@ -1,0 +1,27 @@
+name: Keep API awake
+
+# Render 무료 티어는 15분 무요청 시 절전한다. 깨어나는 데 30~60초가 걸리므로
+# 아침 첫 방문자가 그대로 기다리게 된다. 10분마다 깨워 둔다.
+#
+# 월 750 인스턴스시간 한도 안에 들어간다 (31일 = 744시간).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          if [ -z "$API_BASE_URL" ]; then
+            echo "API_BASE_URL 시크릿이 없습니다. 건너뜁니다."
+            exit 0
+          fi
+          # 절전에서 깨어나는 시간을 고려해 넉넉히 기다린다.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$API_BASE_URL/health" || echo 000)
+          echo "health -> $code"
+          [ "$code" = "200" ]
