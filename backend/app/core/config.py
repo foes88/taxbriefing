@@ -52,7 +52,10 @@ class Settings(BaseSettings):
     ai_provider: str = "stub"
     ai_model: str = "openai/gpt-oss-120b"
     ai_api_key: str | None = None
-    ai_prompt_version: str = "1.0.0"
+    # 프롬프트를 고치면 반드시 올린다. input_hash 에 프롬프트 버전이 들어가므로,
+    # 올리지 않으면 저장된 옛 결과가 재사용되어 변경이 아무 효과도 내지 않는다 (§9.5).
+    # 1.1.0 — 자구 정리·조문 번호 변경 같은 형식적 개정은 changes 에서 제외
+    ai_prompt_version: str = "1.1.0"
 
     # 국가법령정보 공동활용 OPEN API (부록 A, A등급 최우선 출처).
     # OC 는 신청 시 사용자가 직접 지정하는 식별자이며, 호출 URL의 ?OC= 값으로 들어간다.
