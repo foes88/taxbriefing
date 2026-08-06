@@ -199,6 +199,8 @@ def public_feed(
     legal_status: Annotated[list[LegalStatus] | None, Query()] = None,
     risk_level: Annotated[list[RiskLevel] | None, Query()] = None,
     month: Annotated[str | None, Query(description="공포월 YYYY-MM")] = None,
+    promulgated_from: Annotated[dt.date | None, Query(description="공포일 시작")] = None,
+    promulgated_to: Annotated[dt.date | None, Query(description="공포일 종료")] = None,
     effective_from: Annotated[dt.date | None, Query()] = None,
     effective_to: Annotated[dt.date | None, Query()] = None,
     deadline_within_days: Annotated[int | None, Query(ge=1, le=365)] = None,
@@ -217,6 +219,12 @@ def public_feed(
             TaxContent.promulgation_date >= start,
             TaxContent.promulgation_date < end,
         )
+
+    # 기간 검색은 공포일 기준이다. 사업자는 "언제 나온 개정인가"로 찾는다.
+    if promulgated_from:
+        stmt = stmt.where(TaxContent.promulgation_date >= promulgated_from)
+    if promulgated_to:
+        stmt = stmt.where(TaxContent.promulgation_date <= promulgated_to)
 
     if q:
         pattern = f"%{q}%"

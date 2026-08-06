@@ -59,6 +59,9 @@ export interface FeedFilters {
   legal_status?: string[];
   risk_level?: string[];
   month?: string;
+  /** 공포일 기간 검색 (YYYY-MM-DD) */
+  promulgated_from?: string;
+  promulgated_to?: string;
   deadline_within_days?: number;
   limit?: number;
   offset?: number;
@@ -70,6 +73,8 @@ function toQuery(filters: FeedFilters): string {
   filters.legal_status?.forEach((v) => params.append('legal_status', v));
   filters.risk_level?.forEach((v) => params.append('risk_level', v));
   if (filters.month) params.set('month', filters.month);
+  if (filters.promulgated_from) params.set('promulgated_from', filters.promulgated_from);
+  if (filters.promulgated_to) params.set('promulgated_to', filters.promulgated_to);
   if (filters.deadline_within_days) {
     params.set('deadline_within_days', String(filters.deadline_within_days));
   }

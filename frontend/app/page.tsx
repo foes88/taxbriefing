@@ -22,6 +22,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const params = await searchParams;
   const q = typeof params.q === 'string' ? params.q : undefined;
   const month = typeof params.month === 'string' ? params.month : undefined;
+  const from = typeof params.from === 'string' ? params.from : undefined;
+  const to = typeof params.to === 'string' ? params.to : undefined;
   const filtered = Object.keys(params).length > 0;
 
   let feed: PublicFeed | null = null;
@@ -33,6 +35,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       publicApi.feed({
         q,
         month,
+        promulgated_from: from,
+        promulgated_to: to,
         legal_status: pick(params, 'legal_status'),
         risk_level: pick(params, 'risk_level'),
         deadline_within_days: params.deadline === '7' ? 7 : undefined,
@@ -45,6 +49,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   }
 
   const activeMonth = months.find((m) => m.month === month);
+  const rangeLabel =
+    from || to ? `${from ?? '처음'} ~ ${to ?? '오늘'} 공포분` : null;
   const urgent = feed?.items.filter((i) => i.risk_level === 'CRITICAL') ?? [];
 
   return (
@@ -55,7 +61,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <section className="pb-2 pt-8">
           <p className="gutter-date">{todayLabel()}</p>
           <h1 className="mt-2 text-display text-ink">
-            {activeMonth ? `${activeMonth.label} 세무정보` : '오늘 확인할 세무정보'}
+            {activeMonth
+              ? `${activeMonth.label} 세무정보`
+              : rangeLabel
+                ? '기간 검색 결과'
+                : '오늘 확인할 세무정보'}
           </h1>
           <p className="mt-2.5 max-w-[36rem] text-[15px] leading-relaxed text-ink-2">
             법령·관보 등 <strong className="font-semibold text-ink">공식 원문</strong>으로 사실을
@@ -102,9 +112,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               <ErrorState message={error} />
             ) : feed && feed.items.length > 0 ? (
               <>
-                <div className="mt-4 flex items-baseline justify-between border-b border-rule-strong pb-2">
-                  <h2 className="text-[13px] font-bold tracking-tight text-ink">
-                    {activeMonth ? activeMonth.label : '전체'}
+                <div className="mt-4 flex items-baseline justify-between gap-3 border-b border-rule-strong pb-2">
+                  <h2 className="min-w-0 truncate text-[13px] font-bold tracking-tight text-ink">
+                    {activeMonth ? activeMonth.label : (rangeLabel ?? '전체')}
                   </h2>
                   <span className="tabular text-[12px] font-semibold text-ink-3">
                     {feed.total}건
