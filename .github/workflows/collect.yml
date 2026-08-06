@@ -1,13 +1,17 @@
 name: Collect official sources
 
-# 법령 원문 수집. Render 무료 티어에는 Cron Job 이 없어 여기서 돌린다.
+# 법령 원문 수집.
 #
-# 수집 자체는 컨테이너 안에서 도는 것이 아니라 이 러너에서 API 를 통해
-# 트리거한다 — 러너가 DB 에 직접 붙지 않으므로 접속 정보를 노출하지 않는다.
+# 자동 실행은 **꺼져 있다.** 백엔드가 배포되고 아래 시크릿이 등록된 뒤에 켠다.
+#   API_BASE_URL / API_ADMIN_ID / API_ADMIN_PASSWORD
+#
+# 시크릿 없이 예약 실행을 켜두면 매번 실패하고, GitHub 가 실패 알림 메일을 보낸다.
+# 아직 쓰지도 않는 워크플로 때문에 알림이 쌓이면 진짜 실패를 놓치게 된다.
+#
+# 켤 때는 아래 두 줄의 주석을 푼다 (UTC 기준, 평일 KST 09·13·17시).
+#   schedule:
+#     - cron: '0 0,4,8 * * 1-5'
 on:
-  schedule:
-    # UTC 기준. 평일 KST 09시·13시·17시.
-    - cron: '0 0,4,8 * * 1-5'
   workflow_dispatch:
     inputs:
       days:
@@ -18,25 +22,33 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     steps:
-      - name: Wake API
+      - name: Check configuration
+        id: check
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          API_ADMIN_ID: ${{ secrets.API_ADMIN_ID }}
         run: |
-          [ -n "$API_BASE_URL" ] || { echo "API_BASE_URL 없음"; exit 1; }
-          curl -s --max-time 120 "$API_BASE_URL/health" > /dev/null || true
+          if [ -z "$API_BASE_URL" ] || [ -z "$API_ADMIN_ID" ]; then
+            echo "시크릿이 아직 없습니다. 백엔드 배포 후 등록하세요 — docs/DEPLOY.md"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wake API
+        if: steps.check.outputs.ready == 'true'
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: curl -s --max-time 120 "$API_BASE_URL/health" > /dev/null || true
 
       - name: Trigger collection
+        if: steps.check.outputs.ready == 'true'
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_ADMIN_ID: ${{ secrets.API_ADMIN_ID }}
           API_ADMIN_PASSWORD: ${{ secrets.API_ADMIN_PASSWORD }}
         run: |
           set -e
-          if [ -z "$API_ADMIN_ID" ] || [ -z "$API_ADMIN_PASSWORD" ]; then
-            echo "관리자 계정 시크릿이 없습니다. 건너뜁니다."
-            exit 0
-          fi
-
           token=$(curl -s --max-time 60 -X POST "$API_BASE_URL/api/v1/auth/login" \
             -H 'Content-Type: application/json' \
             -d "{\"email\":\"$API_ADMIN_ID\",\"password\":\"$API_ADMIN_PASSWORD\"}" \
@@ -49,4 +61,4 @@ jobs:
 
           echo "로그인 성공. 수집 실행 엔드포인트는 S2 에서 추가됩니다."
           # TODO(S2): POST /api/v1/sources/{id}/runs 로 출처별 수집을 트리거한다.
-          #           현재는 `python -m app.collect` 를 서버에서 직접 실행해야 한다.
+          #           현재는 서버에서 `python -m app.collect` 를 직접 실행해야 한다.
