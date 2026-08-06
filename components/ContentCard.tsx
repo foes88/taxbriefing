@@ -7,35 +7,51 @@ import type { PublicContentSummary } from '@/lib/types';
 /**
  * 목록 항목 (U-02).
  *
- * 관보 색인의 구조를 그대로 가져왔다 — 왼쪽에 일자, 오른쪽에 내용.
- * 그래서 카드가 아니라 **기록(record)** 이고, 그림자 대신 헤어라인으로 나눈다.
+ * 관보 색인의 구조 — 왼쪽에 일자, 오른쪽에 내용. 카드가 아니라 **기록(record)** 이라
+ * 그림자 대신 헤어라인으로 나눈다.
  *
- * 읽는 순서: 시행일 → 중요도·상태 → 제목 → 요약
- * 사장님이 가장 먼저 묻는 것이 "언제부터인가"이기 때문이다.
+ * 일자 거터는 **시행일**이다. 사장님이 가장 먼저 묻는 게 "언제부터인가"이기 때문이다.
+ * 다만 목록의 월 묶음은 **공포월** 기준이라 두 날짜가 다를 수 있다.
+ * 그래서 공포일을 메타 줄에 함께 적는다 — 안 적으면 "5월 목록인데 왜 7월?"이 된다.
  */
-export function ContentRecord({ item }: { item: PublicContentSummary }) {
+export function ContentRecord({
+  item,
+  showPromulgated = true,
+}: {
+  item: PublicContentSummary;
+  showPromulgated?: boolean;
+}) {
   const deadline = daysUntil(item.application_end);
   const showDeadline = deadline !== null && deadline >= 0 && deadline <= 7;
+
+  // 요약이 제목을 그대로 되풀이하면 읽을 게 없다.
+  const summary = item.one_line_summary?.trim();
+  const redundant =
+    !!summary && summary.replace(/[「」·\s()]/g, '').includes(item.title.replace(/[「」·\s()]/g, ''));
 
   return (
     <Link
       href={`/contents/${item.id}`}
-      className="group -mx-3 block rounded-soft px-3 py-4 transition-colors hover:bg-surface"
+      className="group -mx-3 block rounded-soft px-3 py-3 transition-colors hover:bg-surface-sunk"
     >
-      <div className="flex gap-3.5 sm:gap-5">
+      <div className="flex gap-3 sm:gap-4">
         {/* 일자 거터 — 관보 색인의 좌측 열 */}
-        <div className="w-[3.25rem] shrink-0 pt-[3px] sm:w-[4.5rem]">
-          <div className="gutter-date">시행</div>
+        <div className="w-[3.5rem] shrink-0 pt-[2px] sm:w-[4rem]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-3">시행</div>
           <div
-            className={`mt-1 text-[13px] font-bold tabular leading-tight ${
+            className={`tabular mt-0.5 text-[13px] font-bold leading-tight ${
               item.effective_date ? 'text-ink' : 'text-state-pending'
             }`}
           >
             {item.effective_date ? formatDateCompact(item.effective_date) : '미정'}
           </div>
+          {showPromulgated && item.promulgation_date ? (
+            <div className="tabular mt-1 text-[10.5px] leading-tight text-ink-3">
+              공포 {formatDateCompact(item.promulgation_date)}
+            </div>
+          ) : null}
         </div>
 
-        {/* 세로 규칙선 */}
         <div aria-hidden className="w-px shrink-0 bg-rule" />
 
         <div className="min-w-0 flex-1">
@@ -43,23 +59,19 @@ export function ContentRecord({ item }: { item: PublicContentSummary }) {
             <RiskMark risk={item.risk_level} />
             <StatusSeal status={item.legal_status} label={item.status_label} />
             {showDeadline ? <DeadlineMark days={deadline} /> : null}
-            {item.corrected ? (
-              <span className="seal border-seal text-seal">정정</span>
-            ) : null}
+            {item.corrected ? <span className="seal border-seal text-seal">정정</span> : null}
           </div>
 
-          <h3 className="mt-2 text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
+          <h3 className="mt-1.5 text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
             {item.title}
           </h3>
 
-          {item.one_line_summary ? (
-            <p className="mt-1.5 line-clamp-2 text-[15px] leading-relaxed text-ink-2">
-              {item.one_line_summary}
-            </p>
+          {summary && !redundant ? (
+            <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-ink-2">{summary}</p>
           ) : null}
 
           {item.status_caveat ? (
-            <div className="mt-2">
+            <div className="mt-1.5">
               <Caveat text={item.status_caveat} />
             </div>
           ) : null}

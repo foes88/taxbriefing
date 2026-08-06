@@ -126,14 +126,17 @@ def run(
         if result.output.one_line_summary:
             content.one_line_summary = result.output.one_line_summary[:250]
 
-        db.flush()
+        # 건별로 커밋한다. 수십 건을 돌리는 작업이라 마지막에 한 번만 저장하면
+        # 중간에 끊겼을 때 이미 지불한 API 호출이 통째로 날아간다.
+        db.commit()
+
         if result.reused:
             stats["재사용"] += 1
-            print(f"  = {content.title[:36]} (저장된 결과 재사용)")
+            print(f"  = {content.title[:36]} (저장된 결과 재사용)", flush=True)
         else:
             stats["요약"] += 1
             blocked = " [검수 필요]" if result.report.blocked else ""
-            print(f"  + {content.title[:36]}{blocked}")
+            print(f"  + {content.title[:36]}{blocked}", flush=True)
 
     return stats
 
@@ -175,7 +178,6 @@ def main(argv: list[str] | None = None) -> int:
             only_id=UUID(args.id) if args.id else None,
             pace_seconds=args.pace,
         )
-        db.commit()
     except Exception:
         db.rollback()
         raise

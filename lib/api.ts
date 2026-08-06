@@ -1,6 +1,7 @@
 import type {
   AdminContent,
   ApiError,
+  ContentSourceRef,
   GateReport,
   MonthBucket,
   PublicContentDetail,
@@ -188,6 +189,9 @@ export const adminApi = {
   content: (id: string) => request<AdminContent>(`/contents/${id}`, authed()),
 
   gates: (id: string) => request<GateReport>(`/contents/${id}/gates`, authed()),
+
+  contentSources: (id: string) =>
+    request<ContentSourceRef[]>(`/contents/${id}/sources`, authed()),
 
   createContent: (body: {
     title: string;

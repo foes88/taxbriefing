@@ -288,7 +288,7 @@ class GroqProvider:
             for item in items if isinstance(items, list) else []:
                 if not isinstance(item, dict):
                     continue
-                text = str(item.get("text", "")).strip()
+                text = _text(item.get("text"))
                 if not text:
                     continue
                 entry: dict[str, Any] = {
@@ -296,7 +296,7 @@ class GroqProvider:
                     "evidence_ids": cite(item.get("locator")),
                 }
                 if extra == "urgency":
-                    urgency = str(item.get("urgency", "MONITOR"))
+                    urgency = _text(item.get("urgency")) or "MONITOR"
                     entry["urgency"] = (
                         urgency
                         if urgency in ("NOW", "BEFORE_DEADLINE", "MONITOR", "ASK_EXPERT")
@@ -308,7 +308,7 @@ class GroqProvider:
         def strings(value: Any, limit: int = 30) -> list[str]:
             if not isinstance(value, list):
                 return []
-            return [str(v).strip() for v in value if str(v).strip()][:limit]
+            return [t for t in (_text(v) for v in value) if t][:limit]
 
         changes = grounded(model_out.get("changes"))
         impact = grounded(model_out.get("business_impact"))
@@ -321,18 +321,18 @@ class GroqProvider:
 
         warnings = [
             {
-                "code": str(w.get("code", "NEEDS_EXPERT")),
-                "message": str(w.get("message", ""))[:500],
+                "code": _text(w.get("code")) or "NEEDS_EXPERT",
+                "message": _text(w.get("message"))[:500],
                 "related_fields": strings(w.get("related_fields"), 10),
             }
             for w in (model_out.get("warnings") or [])
-            if isinstance(w, dict) and str(w.get("message", "")).strip()
+            if isinstance(w, dict) and _text(w.get("message"))
         ]
 
         return {
             "schema_version": SCHEMA_VERSION,
-            "title": str(model_out.get("title", ""))[:120] or "제목 없음",
-            "one_line_summary": str(model_out.get("one_line_summary", ""))[:250]
+            "title": _text(model_out.get("title"))[:120] or "제목 없음",
+            "one_line_summary": _text(model_out.get("one_line_summary"))[:250]
             or "요약이 생성되지 않았습니다.",
             "legal_status": _enum(
                 model_out.get("legal_status"),
@@ -371,5 +371,17 @@ class GroqProvider:
 
 
 def _enum(value: Any, allowed: tuple[str, ...], fallback: str) -> str:
-    text = str(value or "").strip().upper()
+    text = _text(value).upper()
     return text if text in allowed else fallback
+
+
+def _text(value: Any) -> str:
+    """모델이 null 을 주면 빈 문자열로 만든다.
+
+    `str(None)` 은 `"None"` 이라는 **문자열**이 된다. 그게 그대로 저장되면
+    화면에 "None" 이 찍힌다 — 실제로 그렇게 나갔다.
+    """
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in ("none", "null", "n/a") else text

@@ -113,10 +113,15 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             ) : feed && feed.items.length > 0 ? (
               <>
                 <div className="mt-4 flex items-baseline justify-between gap-3 border-b border-rule-strong pb-2">
-                  <h2 className="min-w-0 truncate text-[13px] font-bold tracking-tight text-ink">
-                    {activeMonth ? activeMonth.label : (rangeLabel ?? '전체')}
+                  <h2 className="min-w-0 text-[13px] font-bold tracking-tight text-ink">
+                    {activeMonth ? `${activeMonth.label} 공포분` : (rangeLabel ?? '전체')}
+                    {activeMonth ? (
+                      <span className="ml-2 text-[11.5px] font-medium text-ink-3">
+                        시행일은 이보다 늦을 수 있습니다
+                      </span>
+                    ) : null}
                   </h2>
-                  <span className="tabular text-[12px] font-semibold text-ink-3">
+                  <span className="tabular shrink-0 text-[12px] font-semibold text-ink-3">
                     {feed.total}건
                   </span>
                 </div>
@@ -124,7 +129,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                 <ul className="divide-y divide-rule">
                   {feed.items.map((item) => (
                     <li key={item.id}>
-                      <ContentRecord item={item} />
+                      {/* 특정 월을 보고 있으면 공포일은 이미 알고 있으니 반복하지 않는다. */}
+                      <ContentRecord item={item} showPromulgated={!activeMonth} />
                     </li>
                   ))}
                 </ul>

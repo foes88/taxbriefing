@@ -313,5 +313,56 @@ class TestContentFlowOverHttp:
         )
         assert r.status_code == 422
 
+    def test_content_sources_are_listed_for_review(
+        self, client, db, make_user, make_source, make_raw_version
+    ):
+        """AT-12: 검수자가 '무엇을 확인했는지' 고르려면 목록이 먼저 보여야 한다.
+
+        이 엔드포인트가 없어서 관리자 화면이 빈 배열을 보냈고, 승인이 항상 실패했다.
+        """
+        from app.services import content as content_service
+
+        source = make_source(AuthorityGrade.A)
+        version = make_raw_version(source, title="관보 공포문")
+        content = content_service.create_content(
+            db, title="테스트 콘텐츠", source_version_ids=[version.id]
+        )
+        viewer = make_user(Role.VIEWER)
+
+        r = client.get(f"/api/v1/contents/{content.id}/sources", headers=token(viewer))
+        assert r.status_code == 200
+
+        rows = r.json()
+        assert len(rows) == 1
+        assert rows[0]["raw_content_version_id"] == str(version.id)
+        assert rows[0]["authority"] == "A"
+        assert rows[0]["role"] == "PRIMARY"
+        assert rows[0]["canonical_url"].startswith("https://")
+
+    def test_approve_without_checked_sources_is_rejected(
+        self, client, db, make_user, make_source, make_raw_version
+    ):
+        """빈 배열로 승인하면 422 여야 한다. 화면이 이 규칙을 어기고 있었다."""
+        from app.services import content as content_service
+
+        source = make_source(AuthorityGrade.A)
+        version = make_raw_version(source)
+        content = content_service.create_content(
+            db, title="테스트", source_version_ids=[version.id]
+        )
+        reviewer = make_user(Role.REVIEWER)
+
+        r = client.post(
+            f"/api/v1/contents/{content.id}/reviews",
+            headers={**token(reviewer), **key()},
+            json={
+                "decision": "APPROVE",
+                "review_note": "확인",
+                "checked_source_version_ids": [],
+            },
+        )
+        # 스키마(minItems=1)에서 걸리거나 서비스에서 걸리거나, 어느 쪽이든 거부돼야 한다.
+        assert r.status_code == 422
+
     def test_health_needs_no_auth(self, client):
         assert client.get("/health").status_code == 200

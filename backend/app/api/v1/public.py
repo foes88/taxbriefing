@@ -65,6 +65,9 @@ class PublicContentSummary(BaseModel):
     is_confirmed: bool
     risk_level: RiskLevel
     effective_date: dt.date | None = None
+    #: 월 묶음이 공포월 기준이므로 목록에서도 함께 보여준다.
+    #: 없으면 "5월 목록인데 왜 7월?" 이라는 혼란이 생긴다.
+    promulgation_date: dt.date | None = None
     application_end: dt.date | None = None
     corrected: bool = False
     updated_at: dt.datetime
@@ -116,6 +119,7 @@ def _summary(content: TaxContent) -> PublicContentSummary:
         is_confirmed=content.legal.is_confirmed,
         risk_level=content.risk,
         effective_date=content.effective_date,
+        promulgation_date=content.promulgation_date,
         application_end=content.application_end,
         corrected=content.workflow is WorkflowStatus.CORRECTED,
         updated_at=content.updated_at,
@@ -276,9 +280,9 @@ def public_content(content_id: UUID, db: DbSession) -> PublicContentDetail:
         raise NotFoundError("콘텐츠를 찾을 수 없습니다.", {"content_id": str(content_id)})
 
     detail = PublicContentDetail(
+        # promulgation_date 는 요약에 이미 들어 있다.
         **_summary(content).model_dump(),
         announcement_date=content.announcement_date,
-        promulgation_date=content.promulgation_date,
         application_start=content.application_start,
         body=_body_of(db, content),
         sources=_sources_of(db, content),

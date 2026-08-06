@@ -14,11 +14,13 @@
   --surface: #ffffff;
   --surface-sunk: #f0f2f5;
 
-  --ink: #171a21;
-  --ink-2: #545c6b;
-  --ink-3: #949ba8;
-  --rule: #e2e5ea;
-  --rule-strong: #c8cdd6;
+  --ink: #14171d;
+  /* 본문 보조. 이전 값(#545C6B)은 14px 에서 흐렸다. */
+  --ink-2: #454c59;
+  /* 메타·라벨. 흰 배경에서 4.5:1 을 넘도록 조금 어둡게 잡았다 (NFR-013). */
+  --ink-3: #767e8c;
+  --rule: #dfe3e9;
+  --rule-strong: #bcc3ce;
 
   --seal: #a8332a;
 

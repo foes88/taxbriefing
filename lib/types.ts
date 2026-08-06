@@ -40,6 +40,8 @@ export interface PublicContentSummary {
   is_confirmed: boolean;
   risk_level: RiskLevel;
   effective_date: string | null;
+  /** 공포일. 목록의 월 묶음이 이 값 기준이라 화면에도 같이 보여준다. */
+  promulgation_date: string | null;
   application_end: string | null;
   corrected: boolean;
   updated_at: string;
@@ -110,6 +112,19 @@ export interface GateResult {
   consequence: string | null;
   reason: string;
   details: Record<string, unknown>;
+}
+
+/** 검수자가 "무엇을 확인했는지" 고르는 목록 (AT-12). */
+export interface ContentSourceRef {
+  raw_content_version_id: string;
+  version_no: number;
+  title: string;
+  publisher: string;
+  authority: 'A' | 'B' | 'C' | 'D';
+  role: 'PRIMARY' | 'SECONDARY' | 'REFERENCE';
+  canonical_url: string;
+  published_at: string | null;
+  collected_at: string;
 }
 
 export interface GateReport {

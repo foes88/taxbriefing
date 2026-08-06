@@ -6,16 +6,20 @@ import datetime as dt
 from uuid import UUID
 
 from fastapi import APIRouter, status
+from sqlalchemy import select
 
 from app.api.deps import DbSession, EditorUser, IdempotencyKey, IfMatch, ReviewerUser, StaffUser
 from app.core import audit, idempotency
 from app.core.rbac import ensure_tenant_scope
+from app.domain.enums import SourceRole
+from app.models.tables import ContentSource, RawContent, RawContentVersion, Source
 from app.schemas.api import (
     AuditLogOut,
     ContentCreate,
     ContentOut,
     ContentPatch,
     ContentPatchResponse,
+    ContentSourceOut,
     EvidenceIn,
     GateReportOut,
     ReviewOut,
@@ -159,6 +163,45 @@ def add_evidence(
     )
     content_service.refresh_confidence(db, content, now=dt.datetime.now(dt.UTC))
     return {"evidence_id": str(evidence.id), "field_name": evidence.field_name}
+
+
+@router.get("/{content_id}/sources", response_model=list[ContentSourceOut])
+def list_content_sources(
+    content_id: UUID,
+    db: DbSession,
+    principal: StaffUser,
+) -> list[ContentSourceOut]:
+    """콘텐츠에 연결된 원문 근거 목록 (FR-VER-001).
+
+    검수자는 승인할 때 **자신이 실제로 확인한 원문 버전**을 지정해야 한다 (AT-12).
+    그러려면 무엇이 연결돼 있는지 먼저 볼 수 있어야 한다.
+    """
+    content = content_service.get_content(db, content_id)
+    ensure_tenant_scope(principal, content.tenant_id)
+
+    rows = db.execute(
+        select(ContentSource, RawContentVersion, RawContent, Source)
+        .join(RawContentVersion, ContentSource.raw_content_version_id == RawContentVersion.id)
+        .join(RawContent, RawContentVersion.raw_content_id == RawContent.id)
+        .join(Source, RawContent.source_id == Source.id)
+        .where(ContentSource.tax_content_id == content_id)
+        .order_by(ContentSource.role)
+    ).all()
+
+    return [
+        ContentSourceOut(
+            raw_content_version_id=version.id,
+            version_no=version.version_no,
+            title=raw.title,
+            publisher=raw.publisher,
+            authority=source.authority,
+            role=SourceRole(link.role),
+            canonical_url=raw.canonical_url,
+            published_at=raw.published_at,
+            collected_at=version.collected_at,
+        )
+        for link, version, raw, source in rows
+    ]
 
 
 @router.get("/{content_id}/gates", response_model=GateReportOut)

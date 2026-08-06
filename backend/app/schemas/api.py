@@ -237,6 +237,20 @@ class ContentOut(Strict):
         )
 
 
+class ContentSourceOut(Strict):
+    """검수자가 "무엇을 확인했는지" 고를 수 있게 내려주는 근거 목록 (AT-12)."""
+
+    raw_content_version_id: UUID
+    version_no: int
+    title: str
+    publisher: str
+    authority: AuthorityGrade
+    role: SourceRole
+    canonical_url: str
+    published_at: dt.datetime | None = None
+    collected_at: dt.datetime
+
+
 class ContentPatchResponse(Strict):
     content: ContentOut
     approval_revoked: bool
