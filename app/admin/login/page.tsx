@@ -71,17 +71,25 @@ export default function AdminLoginPage() {
           </button>
         </form>
 
-        <div className="mt-5 rounded-lg bg-surface-sunk p-3 text-xs leading-relaxed text-ink-2">
-          <p className="font-semibold text-ink">로컬 개발 계정</p>
-          <p className="mt-1">
-            운영자·관리자 <code className="rounded bg-white px-1">admin / admin1234</code>
-            <br />
-            검수자 <code className="rounded bg-white px-1">reviewer / reviewer1234</code>
-          </p>
-          <p className="mt-1.5 text-ink-3">
-            승인은 검수자만 가능합니다. 관리자도 승인할 수 없습니다.
-          </p>
-        </div>
+        {/*
+          개발 계정 안내는 개발 빌드에서만 보여준다.
+          배포된 화면에 기본 계정이 적혀 있으면 그 자체가 취약점이다.
+          이 조건은 빌드 시점에 정적으로 평가되어 운영 번들에서 통째로 제거된다.
+        */}
+        {process.env.NODE_ENV !== 'production' ? (
+          <div className="mt-5 bg-surface-sunk p-3 text-xs leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">로컬 개발 계정</p>
+            <p className="mt-1">
+              운영자·관리자 <code className="bg-white px-1">admin / admin1234</code>
+              <br />
+              검수자 <code className="bg-white px-1">reviewer / reviewer1234</code>
+            </p>
+          </div>
+        ) : null}
+
+        <p className="mt-4 text-[12px] leading-relaxed text-ink-3">
+          승인은 검수자만 할 수 있습니다. 최고관리자도 승인할 수 없습니다.
+        </p>
       </div>
     </div>
   );
