@@ -19,16 +19,33 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
+from app.domain.enums import CollectorType
 from app.models.tables import Source
 from app.services.collectors.base import run_collection
 from app.services.collectors.law_go_kr import AdmRulCollector, LawCollector, LawGoKrClient
+from app.services.collectors.naver_news import NaverNewsCollector
+from app.services.collectors.rss import RssCollector
 
 logger = get_logger(__name__)
 
-#: 도메인 → 어댑터. 새 출처를 붙이면 여기만 늘어난다.
+#: 도메인 → 어댑터. 특정 API 를 쓰는 출처만 여기에 둔다.
+#: 나머지는 collector_type 으로 고른다 (RSS 등) — 출처를 늘려도 코드가 늘지 않는다.
 ADAPTERS = {
     "law.go.kr": (LawCollector, AdmRulCollector),
+    "openapi.naver.com": (NaverNewsCollector,),
 }
+
+
+def adapters_for(source: Source) -> tuple[type, ...]:
+    """출처에 맞는 어댑터를 고른다."""
+    specific = ADAPTERS.get(source.canonical_domain)
+    if specific:
+        return specific
+    if source.collector_type == CollectorType.RSS.value and (source.settings or {}).get(
+        "feed_url"
+    ):
+        return (RssCollector,)
+    return ()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,36 +63,40 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     configure_logging(debug=settings.debug)
 
-    if not settings.law_api_oc:
-        print(
-            "TAXBRIEFING_LAW_API_OC 가 설정되지 않았습니다.\n"
-            "open.law.go.kr 에서 신청한 OC 값을 .env 에 넣으세요.",
-            file=sys.stderr,
-        )
-        return 2
-
     since = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=args.days)
-    client = LawGoKrClient()
+    law_client = LawGoKrClient()
     db = SessionLocal()
     total = {"discovered": 0, "new": 0, "changed": 0, "unchanged": 0, "errors": 0}
 
     try:
-        domains = [args.source] if args.source else list(ADAPTERS)
-        for domain in domains:
-            adapters = ADAPTERS.get(domain)
-            if adapters is None:
-                print(f"'{domain}' 어댑터가 없습니다. 사용 가능: {', '.join(ADAPTERS)}")
-                continue
+        if args.source:
+            sources = db.execute(
+                select(Source).where(Source.canonical_domain == args.source)
+            ).scalars().all()
+            if not sources:
+                print(f"출처가 등록되지 않았습니다: {args.source}")
+                return 2
+        else:
+            # 어댑터가 있는 출처만 돈다. 등록만 되고 수집 방법이 없는 출처는 건너뛴다.
+            sources = [
+                s
+                for s in db.execute(select(Source).order_by(Source.display_name)).scalars()
+                if adapters_for(s)
+            ]
 
-            source = db.execute(
-                select(Source).where(Source.canonical_domain == domain)
-            ).scalar_one_or_none()
-            if source is None:
-                print(f"출처가 등록되지 않았습니다: {domain}. `python -m app.seed` 를 먼저 실행하세요.")
+        for source in sources:
+            adapters = adapters_for(source)
+            if not adapters:
+                print(f"'{source.canonical_domain}' 에 맞는 어댑터가 없습니다.")
                 continue
 
             for adapter_cls in adapters:
-                collector = adapter_cls(client)
+                # 법령 어댑터만 공용 클라이언트를 받는다.
+                collector = (
+                    adapter_cls(law_client)
+                    if adapter_cls in (LawCollector, AdmRulCollector)
+                    else adapter_cls()
+                )
                 print(f"\n▶ {source.display_name} / {collector.name} (최근 {args.days}일)")
                 run, stats = run_collection(
                     db,

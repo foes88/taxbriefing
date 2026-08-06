@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     law_api_oc: str | None = None
     law_api_base_url: str = "https://www.law.go.kr/DRF"
 
+    # 네이버 검색 API (뉴스 탐지용, C/D 등급).
+    # developers.naver.com 에서 애플리케이션을 등록하면 무료로 받는다.
+    # 크롤링 대신 공식 API 를 쓰는 이유는 §3.4 — 우회는 구현하지 않는다.
+    naver_client_id: str | None = None
+    naver_client_secret: str | None = None
+
     # 수집 SSRF 방어 (§12.3, AT-14).
     collector_max_redirects: int = 3
     collector_timeout_seconds: float = 20.0

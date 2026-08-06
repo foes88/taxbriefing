@@ -52,6 +52,26 @@ SOURCES: list[tuple[str, str, AuthorityGrade, CollectorType, str]] = [
     ("소상공인24", "sbiz24.kr", AuthorityGrade.B, CollectorType.HTML, "소상공인 지원사업·정책"),
 ]
 
+#: 뉴스 출처 (C/D 등급). 이슈 탐지·맥락용이며 단독으로는 발송되지 않는다 (§3.1, AT-03).
+#: 저작권상 제목·링크·짧은 요약만 저장한다 (§NFR-015).
+#: (표시명, 도메인, 등급, 피드 주소, 비고)
+NEWS_SOURCES: list[tuple[str, str, AuthorityGrade, str, str]] = [
+    (
+        "세정일보",
+        "sejungilbo.com",
+        AuthorityGrade.C,
+        "https://www.sejungilbo.com/rss/allArticle.xml",
+        "세무 전문언론. 상업 재배포 조건 확인 전까지 ACTIVE 로 전환하지 않는다",
+    ),
+    (
+        "네이버 뉴스 검색",
+        "openapi.naver.com",
+        AuthorityGrade.D,
+        "",  # 피드가 아니라 검색 API 다. collector 가 검색어로 조회한다.
+        "공식 검색 API. 이슈 탐지용이며 단독 근거로 쓰지 않는다",
+    ),
+]
+
 # 개인화 축 (§11.1). 운영자가 콘텐츠에 붙이는 정규화 태그다.
 TAGS: list[tuple[str, str, str]] = [
     # 사업자 유형
@@ -105,6 +125,31 @@ def seed_sources(db: Session) -> int:
             )
         )
         created += 1
+
+    for display_name, domain, authority, feed_url, note in NEWS_SOURCES:
+        exists = db.execute(
+            select(Source).where(Source.canonical_domain == domain)
+        ).scalar_one_or_none()
+        if exists is not None:
+            continue
+        db.add(
+            Source(
+                display_name=display_name,
+                canonical_domain=domain,
+                authority=authority,
+                collector_type=CollectorType.RSS.value,
+                # 민간 언론은 상업 재배포 조건을 확인해야 한다 (§NFR-015, 미결 ④).
+                status="PENDING_REVIEW",
+                settings={"note": note, "feed_url": feed_url, "verified_at": None},
+                copyright_policy={
+                    "full_text_storage": False,
+                    "redistribution": "unverified",
+                    "note": "제목·링크·짧은 요약만 저장. 상업 재배포 조건 미확인",
+                },
+            )
+        )
+        created += 1
+
     return created
 
 
