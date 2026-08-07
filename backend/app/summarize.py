@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
+from app.domain.industry import is_internal_document
 from app.models.tables import ContentSource, ContentVersion, TaxContent
 from app.services.ai import runner
 from app.services.ai.contract import AnalysisOutput
@@ -90,6 +91,13 @@ def run(
         # 한도는 **시도 횟수**를 센다. 성공만 세면 계속 실패할 때 멈추지 않는다.
         if stats["대상"] >= limit:
             break
+
+        # 화면에서 숨기는 기관 내부 문서는 요약하지 않는다.
+        # "국세청 인사관리규정" 을 사장님용 문장으로 옮겨 봐야 아무도 안 보고,
+        # 무료 티어의 분당 토큰은 정작 필요한 개정에서 모자란다.
+        if not force and is_internal_document(content.title):
+            stats["건너뜀"] += 1
+            continue
 
         version = (
             db.get(ContentVersion, content.current_version_id)
