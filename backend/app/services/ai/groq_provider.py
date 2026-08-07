@@ -230,7 +230,35 @@ class GroqProvider:
             {"role": "user", "content": "\n".join(parts)},
         ]
 
-    def _call(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+    def complete_json(
+        self, system: str, user: str, *, max_tokens: int = 2400
+    ) -> dict[str, Any]:
+        """JSON 응답을 받는 단발 호출. 429 만 재시도한다.
+
+        분석(analyze)이 아닌 짧은 보조 작업 — 분류·태깅 같은 것 — 이 쓴다.
+        입력이 짧아 413 이 날 일이 없으므로 축소 로직은 없다.
+        """
+        if not self.api_key:
+            raise GroqError("TAXBRIEFING_AI_API_KEY 가 설정되지 않았습니다.")
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        for attempt in range(MAX_RETRIES):
+            try:
+                return self._call(messages, max_tokens=max_tokens)
+            except GroqRateLimited as exc:
+                if attempt == MAX_RETRIES - 1:
+                    raise GroqError("GROQ 분당 한도를 계속 초과합니다.") from exc
+                wait = exc.retry_after or BACKOFF_SECONDS[attempt]
+                logger.info("groq.rate_limited", wait_seconds=wait, attempt=attempt + 1)
+                time.sleep(wait)
+        raise GroqError("GROQ 호출을 완료하지 못했습니다.")
+
+    def _call(
+        self, messages: list[dict[str, str]], *, max_tokens: int = 2400
+    ) -> dict[str, Any]:
         client = self._client or httpx.Client(timeout=self._timeout)
         owns = self._client is None
         try:
@@ -242,7 +270,7 @@ class GroqProvider:
                     "messages": messages,
                     # 같은 원문에 같은 답이 나와야 재현성이 성립한다 (§9.5).
                     "temperature": 0.1,
-                    "max_tokens": 2400,
+                    "max_tokens": max_tokens,
                     "response_format": {"type": "json_object"},
                 },
             )

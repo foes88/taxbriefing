@@ -70,6 +70,21 @@ export function ContentRecord({
             <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-ink-2">{summary}</p>
           ) : null}
 
+          {/*
+            업종은 상태 도장과 같은 줄에 두지 않는다. 도장은 "확정됐는가"를,
+            업종은 "누구 얘기인가"를 말한다. 성격이 다른 표시를 붙여 놓으면
+            둘 다 안 읽힌다.
+          */}
+          {item.industry_labels.length > 0 ? (
+            <p className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-1 text-[11.5px] text-ink-3">
+              {item.industry_labels.map((name) => (
+                <span key={name} className="border-l border-rule-strong pl-1.5">
+                  {name}
+                </span>
+              ))}
+            </p>
+          ) : null}
+
           {item.status_caveat ? (
             <div className="mt-1.5">
               <Caveat text={item.status_caveat} />

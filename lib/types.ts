@@ -45,6 +45,10 @@ export interface PublicContentSummary {
   application_end: string | null;
   corrected: boolean;
   updated_at: string;
+  /** 업종 코드. 상담 참고용 색인이지 적용 판정이 아니다. */
+  industries: string[];
+  /** 화면용 업종 이름. 서버가 만든다 — 프론트에 분류표를 복사해두지 않는다. */
+  industry_labels: string[];
 }
 
 export interface PublicSource {
@@ -78,6 +82,13 @@ export interface MonthBucket {
   label: string;
   count: number;
   important: number;
+}
+
+/** 업종 필터 항목. 게시된 건이 있는 업종만 내려온다. */
+export interface IndustryBucket {
+  code: string;
+  label: string;
+  count: number;
 }
 
 /**

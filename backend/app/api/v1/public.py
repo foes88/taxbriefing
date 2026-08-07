@@ -15,11 +15,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.core.errors import NotFoundError, ValidationFailedError
+from app.domain import industry
 from app.domain.enums import LegalStatus, RiskLevel, WorkflowStatus
 from app.models.tables import (
     ContentEvidence,
@@ -71,6 +72,9 @@ class PublicContentSummary(BaseModel):
     application_end: dt.date | None = None
     corrected: bool = False
     updated_at: dt.datetime
+    #: 업종 코드와 화면용 이름. 상담 참고용 색인이지 적용 판정이 아니다.
+    industries: list[str] = Field(default_factory=list)
+    industry_labels: list[str] = Field(default_factory=list)
 
 
 class PublicContentDetail(PublicContentSummary):
@@ -155,6 +159,8 @@ def _summary(content: TaxContent) -> PublicContentSummary:
         application_end=content.application_end,
         corrected=content.workflow is WorkflowStatus.CORRECTED,
         updated_at=content.updated_at,
+        industries=list(content.industries or []),
+        industry_labels=[industry.label(code) for code in (content.industries or [])],
     )
 
 
@@ -228,12 +234,53 @@ def public_months(
     return out
 
 
+class IndustryBucket(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    count: int
+
+
+@router.get("/industries", response_model=list[IndustryBucket])
+def public_industries(db: DbSession) -> list[IndustryBucket]:
+    """업종 목록과 건수.
+
+    분류표 전체가 아니라 **실제로 게시된 건이 있는 업종만** 준다.
+    0건짜리 버튼을 눌러 빈 화면을 보는 일이 없어야 한다.
+    """
+    # 배열을 행으로 편다. lateral 조인이라 명시적으로 붙여야 한다 —
+    # 안 붙이면 SQLAlchemy 가 교차곱을 만들고 건수가 부풀려진다.
+    unnested = func.jsonb_array_elements_text(TaxContent.industries).table_valued("value")
+    stmt = (
+        select(unnested.c.value, func.count().label("count"))
+        .select_from(TaxContent)
+        .join(unnested, true())
+        .where(
+            TaxContent.workflow.in_(PUBLIC_STATES),
+            TaxContent.tenant_id.is_(None),
+        )
+        .group_by(unnested.c.value)
+    )
+
+    order = {item.value: index for index, item in enumerate(industry.Industry)}
+    rows = [
+        IndustryBucket(code=value, label=industry.label(value), count=count)
+        for value, count in db.execute(stmt).all()
+    ]
+    # 건수가 아니라 분류표 순서로 낸다. 필터 버튼의 자리가 매일 바뀌면
+    # "아까 여기 있었는데" 하고 눈으로 찾게 된다.
+    rows.sort(key=lambda bucket: order.get(bucket.code, 999))
+    return rows
+
+
 @router.get("/feed", response_model=PublicFeed)
 def public_feed(
     db: DbSession,
     q: Annotated[str | None, Query(description="제목·요약 키워드")] = None,
     legal_status: Annotated[list[LegalStatus] | None, Query()] = None,
     risk_level: Annotated[list[RiskLevel] | None, Query()] = None,
+    industries: Annotated[list[str] | None, Query(description="업종 코드")] = None,
     month: Annotated[str | None, Query(description="공포월 YYYY-MM")] = None,
     promulgated_from: Annotated[dt.date | None, Query(description="공포일 시작")] = None,
     promulgated_to: Annotated[dt.date | None, Query(description="공포일 종료")] = None,
@@ -263,9 +310,22 @@ def public_feed(
         stmt = stmt.where(TaxContent.promulgation_date <= promulgated_to)
 
     if q:
+        # 제목·요약만 검색하면 "학원 4대보험" 같은 실무 질문이 안 걸린다.
+        # 정작 답은 개정 내용과 사업자 할 일에 들어 있고, 그건 search_text 에 있다.
+        # 아직 search_text 가 안 채워진 콘텐츠도 있으므로 제목·요약도 함께 본다.
         pattern = f"%{q}%"
         stmt = stmt.where(
-            or_(TaxContent.title.ilike(pattern), TaxContent.one_line_summary.ilike(pattern))
+            or_(
+                TaxContent.title.ilike(pattern),
+                TaxContent.one_line_summary.ilike(pattern),
+                TaxContent.search_text.ilike(pattern),
+            )
+        )
+    if industries:
+        # 어느 하나라도 겹치면 나온다. "요식업과 학원 둘 다 해당" 을 요구하면
+        # 상담 중에 찾으려던 건이 사라진다.
+        stmt = stmt.where(
+            or_(*[TaxContent.industries.contains([code]) for code in industries])
         )
     if legal_status:
         stmt = stmt.where(TaxContent.legal.in_(legal_status))

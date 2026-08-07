@@ -7,7 +7,7 @@ import { MonthNav, MonthStrip } from '@/components/MonthNav';
 import { SectionTabs } from '@/components/SectionTabs';
 import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
 import { todayLabel } from '@/lib/format';
-import type { MonthBucket, PublicFeed } from '@/lib/types';
+import type { IndustryBucket, MonthBucket, PublicFeed } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +29,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
   let feed: PublicFeed | null = null;
   let months: MonthBucket[] = [];
+  let industries: IndustryBucket[] = [];
   let error: string | null = null;
 
   try {
-    [feed, months] = await Promise.all([
+    [feed, months, industries] = await Promise.all([
       publicApi.feed({
         q,
         month,
@@ -40,14 +41,20 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         promulgated_to: to,
         legal_status: pick(params, 'legal_status'),
         risk_level: pick(params, 'risk_level'),
+        industries: pick(params, 'industries'),
         deadline_within_days: params.deadline === '7' ? 7 : undefined,
         limit: 60,
       }),
       publicApi.months(),
+      publicApi.industries(),
     ]);
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
+
+  const activeIndustries = industries.filter((item) =>
+    (pick(params, 'industries') ?? []).includes(item.code),
+  );
 
   const activeMonth = months.find((m) => m.month === month);
   const rangeLabel =
@@ -108,7 +115,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
           {/* ── 본문 ── */}
           <div className="min-w-0">
-            <FilterBar />
+            <FilterBar industries={industries} />
 
             {error ? (
               <ErrorState message={error} />
@@ -116,8 +123,12 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               <>
                 <div className="mt-4 flex items-baseline justify-between gap-3 border-b border-rule-strong pb-2">
                   <h2 className="min-w-0 text-[13px] font-bold tracking-tight text-ink">
-                    {activeMonth ? `${activeMonth.label} 공포분` : (rangeLabel ?? '전체')}
-                    {activeMonth ? (
+                    {activeIndustries.length > 0
+                      ? activeIndustries.map((i) => i.label).join(' · ')
+                      : activeMonth
+                        ? `${activeMonth.label} 공포분`
+                        : (rangeLabel ?? '전체')}
+                    {activeMonth && activeIndustries.length === 0 ? (
                       <span className="ml-2 text-[11.5px] font-medium text-ink-3">
                         시행일은 이보다 늦을 수 있습니다
                       </span>

@@ -3,6 +3,7 @@ import type {
   ApiError,
   ContentSourceRef,
   GateReport,
+  IndustryBucket,
   MonthBucket,
   NewsFeed,
   PublicContentDetail,
@@ -85,6 +86,7 @@ export interface FeedFilters {
   q?: string;
   legal_status?: string[];
   risk_level?: string[];
+  industries?: string[];
   month?: string;
   /** 공포일 기간 검색 (YYYY-MM-DD) */
   promulgated_from?: string;
@@ -99,6 +101,7 @@ function toQuery(filters: FeedFilters): string {
   if (filters.q) params.set('q', filters.q);
   filters.legal_status?.forEach((v) => params.append('legal_status', v));
   filters.risk_level?.forEach((v) => params.append('risk_level', v));
+  filters.industries?.forEach((v) => params.append('industries', v));
   if (filters.month) params.set('month', filters.month);
   if (filters.promulgated_from) params.set('promulgated_from', filters.promulgated_from);
   if (filters.promulgated_to) params.set('promulgated_to', filters.promulgated_to);
@@ -124,6 +127,8 @@ export const publicApi = {
       // 월 목록은 하루에 몇 번 바뀔까 말까다.
       cacheSeconds: 300,
     }),
+  industries: () =>
+    request<IndustryBucket[]>('/public/industries', undefined, { cacheSeconds: 300 }),
   news: (params: { q?: string; days?: number; limit?: number } = {}) => {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);

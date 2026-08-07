@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
+import type { IndustryBucket } from '@/lib/types';
+
 /**
  * 검색·필터 (U-02).
  *
@@ -23,7 +25,7 @@ const STATUS = [
   { value: 'BILL_PROPOSED', label: '발의' },
 ] as const;
 
-export function FilterBar() {
+export function FilterBar({ industries = [] }: { industries?: IndustryBucket[] }) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -94,11 +96,15 @@ export function FilterBar() {
           <input key={v} type="hidden" name="legal_status" value={v} />
         ))}
 
+        {params.getAll('industries').map((v) => (
+          <input key={v} type="hidden" name="industries" value={v} />
+        ))}
+
         <input
           type="search"
           name="q"
           defaultValue={params.get('q') ?? ''}
-          placeholder="세목·제도명 검색 (예: 부가가치세)"
+          placeholder="상담 내용으로 검색 (예: 학원 4대보험, 배달 원천징수)"
           aria-label="키워드 검색"
           className="min-w-0 flex-1 rounded-sharp border border-rule-strong bg-surface px-3 py-2 text-[15px] text-ink placeholder:text-ink-3 focus:border-ink"
         />
@@ -106,6 +112,25 @@ export function FilterBar() {
           검색
         </button>
       </form>
+
+      {/*
+        업종은 별도 줄에 둔다. 상담 중에 가장 먼저 좁히는 축이라
+        중요도·상태 칩과 같은 줄에 섞이면 매번 눈으로 찾아야 한다.
+      */}
+      {industries.length > 0 ? (
+        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto border-t border-rule pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="label shrink-0 pr-0.5">업종</span>
+          {industries.map((item) => (
+            <Chip
+              key={item.code}
+              label={item.label}
+              count={item.count}
+              active={on('industries', item.code)}
+              onClick={() => toggle('industries', item.code)}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Chip
@@ -201,10 +226,12 @@ function Chip({
   label,
   active,
   onClick,
+  count,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  count?: number;
 }) {
   return (
     <button
@@ -218,6 +245,13 @@ function Chip({
       }`}
     >
       {label}
+      {count !== undefined ? (
+        <span
+          className={`tabular ml-1.5 font-medium ${active ? 'text-surface/70' : 'text-ink-3'}`}
+        >
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }

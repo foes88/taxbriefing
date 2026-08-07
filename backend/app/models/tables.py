@@ -294,6 +294,13 @@ class TaxContent(Base):
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(
         _UUID, ForeignKey("content_versions.id", use_alter=True)
     )
+    #: 업종 분류 (app.domain.industry). 상담 참고용 색인이지 적용 판정이 아니다.
+    industries: Mapped[list[str]] = mapped_column(
+        "industries", JSONB, nullable=False, default=list
+    )
+    #: 검색용 합본 텍스트. 본문이 content_versions 에 있어 생성 컬럼으로 못 만든다.
+    #: 게시·수정 시점에 코드가 채운다.
+    search_text: Mapped[str | None] = mapped_column(Text)
     # 낙관적 잠금 (§8.1 If-Match).
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[uuid.UUID | None] = mapped_column(_UUID, ForeignKey("users.id"))
