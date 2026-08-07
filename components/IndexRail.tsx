@@ -129,7 +129,7 @@ export function IndexRail({
 
 function RailHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="border-b-2 border-ink px-1 pb-1.5">
+    <h2 className="border-b-2 border-band px-1 pb-2">
       <span className="label text-ink">{children}</span>
     </h2>
   );
@@ -153,18 +153,20 @@ function RailRow({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex w-full items-baseline justify-between gap-2 border-l-2 py-[5px] pl-2 pr-1 text-left transition-colors ${
+      className={`flex w-full items-baseline justify-between gap-2 border-l-[3px] py-1.5 pl-2.5 pr-1 text-left transition-colors ${
         active
-          ? 'border-seal font-bold text-ink'
+          ? 'border-accent bg-accent-soft font-bold text-accent'
           : 'border-transparent text-ink-2 hover:border-rule-strong hover:text-ink'
       }`}
     >
-      <span className="min-w-0 truncate text-[13.5px]">{label}</span>
+      <span className="min-w-0 truncate text-[14px]">{label}</span>
       <span className="flex shrink-0 items-baseline gap-1.5">
         {important ? (
-          <span className="tabular text-[11px] font-bold text-seal">{important}</span>
+          <span className="tabular text-[12px] font-bold text-seal">{important}</span>
         ) : null}
-        <span className="tabular text-[12px] text-ink-3">{count}</span>
+        <span className={`tabular text-[13px] ${active ? 'text-accent' : 'text-ink-3'}`}>
+          {count}
+        </span>
       </span>
     </button>
   );

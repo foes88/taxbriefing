@@ -84,10 +84,10 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 
 function StatusPill({ status, failing }: { status: string; failing: boolean }) {
-  if (failing) return <span className="seal bg-rose-100 text-rose-800">수집 실패</span>;
-  if (status === 'ACTIVE') return <span className="seal bg-emerald-100 text-emerald-800">수집 중</span>;
+  if (failing) return <span className="tag bg-rose-100 text-rose-800">수집 실패</span>;
+  if (status === 'ACTIVE') return <span className="tag bg-emerald-100 text-emerald-800">수집 중</span>;
   if (status === 'PENDING_REVIEW')
-    return <span className="seal bg-amber-100 text-amber-900">확인 대기</span>;
-  return <span className="seal bg-slate-100 text-slate-600">{status}</span>;
+    return <span className="tag bg-amber-100 text-amber-900">확인 대기</span>;
+  return <span className="tag bg-slate-100 text-slate-600">{status}</span>;
 }
 

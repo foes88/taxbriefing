@@ -28,7 +28,7 @@ export default async function GatePage({
       <div className="w-full max-w-sm">
         <div className="mb-6">
           <p className="text-[19px] font-extrabold tracking-[-0.02em] text-ink">TaxBriefing</p>
-          <div aria-hidden className="mt-2 h-[2px] w-10 bg-seal" />
+          <div aria-hidden className="mt-2 h-[3px] w-10 bg-accent" />
         </div>
 
         {unset ? (

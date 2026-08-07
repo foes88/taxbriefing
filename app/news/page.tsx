@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 import { Masthead } from '@/components/Masthead';
 import { NewsRecord } from '@/components/NewsRecord';
-import { SectionTabs } from '@/components/SectionTabs';
 import { publicApi } from '@/lib/api';
 import { groupByDate, todayLabel } from '@/lib/format';
 import type { NewsFeed } from '@/lib/types';
@@ -45,8 +44,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
 
   return (
     <div className="min-h-screen">
-      <Masthead />
-      <SectionTabs active="news" />
+      <Masthead active="news" />
 
       {/* 한 열. 폭을 읽기 좋은 만큼만 준다 — 사이드바가 없어 예전에는 요약이
           화면을 가로질렀고, 한 줄에 백 자가 넘었다. */}
@@ -116,34 +114,36 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
           </div>
         ) : groups.length > 0 ? (
           <>
-            <div className="mt-7 flex items-center justify-between gap-3 border-b-2 border-ink pb-2">
+            <div className="mt-7 flex items-center justify-between gap-3 pb-2.5">
               <h2 className="section-mark">발행일 최신순</h2>
               <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink-3">
                 {feed?.total ?? 0}건
               </span>
             </div>
 
-            {groups.map((group) => (
-              <section key={group.date ?? 'undated'} className="mt-5">
-                <h3 className="flex items-baseline gap-3 border-b border-rule pb-1.5">
-                  <span className="tabular text-[13px] font-extrabold tracking-tight text-ink">
-                    {group.heading}
-                  </span>
-                  <span className="tabular ml-auto text-[11.5px] text-ink-3">
-                    {group.items.length}
-                  </span>
-                </h3>
-                <ul className="divide-y divide-rule">
-                  {group.items.map((item) => (
-                    <li key={item.id}>
-                      <NewsRecord item={item} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+            <div className="panel overflow-hidden">
+              {groups.map((group) => (
+                <section key={group.date ?? 'undated'}>
+                  <h3 className="flex items-baseline gap-3 border-y border-rule bg-surface-sunk px-4 py-2 first:border-t-0">
+                    <span className="tabular text-[13px] font-extrabold tracking-tight text-ink">
+                      {group.heading}
+                    </span>
+                    <span className="tabular ml-auto text-[12px] font-semibold text-ink-3">
+                      {group.items.length}
+                    </span>
+                  </h3>
+                  <ul className="divide-y divide-rule">
+                    {group.items.map((item) => (
+                      <li key={item.id}>
+                        <NewsRecord item={item} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
 
-            <p className="mt-8 border-t border-rule pt-4 text-center text-[12.5px] text-ink-3">
+            <p className="mt-6 text-center text-[13px] text-ink-3">
               링크를 누르면 해당 언론사 사이트로 이동합니다. TaxBriefing 은 기사 본문을
               저장하지 않습니다.
             </p>

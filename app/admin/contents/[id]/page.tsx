@@ -176,7 +176,7 @@ export default function ContentEditorPage() {
       </Link>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="seal border-ink text-ink">{content.workflow_status}</span>
+        <span className="tag border border-ink text-ink">{content.workflow_status}</span>
         <span className="tabular text-[12px] text-ink-3">
           신뢰도 {content.source_confidence}/100 · v{content.version}
         </span>

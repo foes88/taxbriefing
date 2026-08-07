@@ -5,7 +5,6 @@ import { FilterBar } from '@/components/FilterBar';
 import { IndexRail } from '@/components/IndexRail';
 import { Masthead } from '@/components/Masthead';
 import { MonthStrip } from '@/components/MonthNav';
-import { SectionTabs } from '@/components/SectionTabs';
 import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
 import { groupByDate, todayLabel } from '@/lib/format';
 import type { IndustryBucket, MonthBucket, PublicContentSummary, PublicFeed } from '@/lib/types';
@@ -90,8 +89,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
   return (
     <div className="min-h-screen">
-      <Masthead />
-      <SectionTabs active="policy" />
+      <Masthead active="policy" />
 
       <main className="mx-auto max-w-page px-4 pb-24">
         <section className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pb-4 pt-8">
@@ -120,7 +118,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           </div>
 
           <div className="min-w-0">
-            <div className="border-b border-rule pb-3 pt-1">
+            <div className="panel px-4 py-3.5">
               <FilterBar />
             </div>
 
@@ -132,11 +130,12 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               <>
                 {lead.length > 0 ? (
                   <section className="mt-7">
-                    <div className="flex items-center justify-between gap-3 border-b-2 border-ink pb-2">
+                    <div className="flex items-center justify-between gap-3 pb-2.5">
                       <h2 className="section-mark">먼저 볼 것</h2>
-                      <span className="text-[12px] text-ink-3">중요도·마감 순</span>
+                      <span className="text-[12.5px] text-ink-3">중요도·마감 순</span>
                     </div>
-                    <ul className="divide-y divide-rule">
+                    {/* 판(panel)에 올린다. 배경이 다르면 "골라 놓은 것"으로 읽힌다. */}
+                    <ul className="panel divide-y divide-rule">
                       {lead.map((item, index) => (
                         <li key={item.id}>
                           <LeadItem item={item} index={index} />
@@ -147,7 +146,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                 ) : null}
 
                 <section className="mt-10">
-                  <div className="flex items-center justify-between gap-3 border-b-2 border-ink pb-2">
+                  <div className="flex items-center justify-between gap-3 pb-2.5">
                     <h2 className="section-mark">전체 기록</h2>
                     <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink-3">
                       {feed?.total ?? items.length}건
@@ -159,29 +158,31 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                     묶이는 방식이다. 행마다 날짜를 반복하던 거터를 없앴다 —
                     같은 날 공포분이 여러 건이면 같은 숫자만 연달아 나왔다.
                   */}
-                  {groups.map((group) => (
-                    <section key={group.date ?? 'undated'} className="mt-6 first:mt-5">
-                      <h3 className="flex items-baseline gap-3 border-b border-rule-strong pb-1.5">
-                        <span className="tabular text-[13px] font-extrabold tracking-tight text-ink">
-                          {group.heading}
-                        </span>
-                        <span className="text-[11px] text-ink-3">공포</span>
-                        <span className="tabular ml-auto text-[11.5px] text-ink-3">
-                          {group.items.length}
-                        </span>
-                      </h3>
-                      <ul className="divide-y divide-rule">
-                        {group.items.map((item) => (
-                          <li key={item.id}>
-                            <RecordRow item={item} />
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
+                  <div className="panel overflow-hidden">
+                    {groups.map((group) => (
+                      <section key={group.date ?? 'undated'}>
+                        <h3 className="flex items-baseline gap-3 border-y border-rule bg-surface-sunk px-4 py-2 first:border-t-0 sm:px-5">
+                          <span className="tabular text-[13px] font-extrabold tracking-tight text-ink">
+                            {group.heading}
+                          </span>
+                          <span className="text-[11.5px] text-ink-3">공포</span>
+                          <span className="tabular ml-auto text-[12px] font-semibold text-ink-3">
+                            {group.items.length}
+                          </span>
+                        </h3>
+                        <ul className="divide-y divide-rule">
+                          {group.items.map((item) => (
+                            <li key={item.id}>
+                              <RecordRow item={item} />
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
 
                   {feed && feed.total > items.length ? (
-                    <p className="mt-8 border-t border-rule pt-4 text-center text-[12.5px] text-ink-3">
+                    <p className="mt-6 text-center text-[13px] text-ink-3">
                       {items.length}건 표시 · 전체 {feed.total}건. 왼쪽에서 월이나 업종을 골라
                       좁혀 보세요.
                     </p>
@@ -193,7 +194,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         </div>
       </main>
 
-      <footer className="mt-8 border-t-2 border-ink bg-surface">
+      <footer className="mt-8 border-t-4 border-band bg-surface">
         <div className="mx-auto max-w-page px-4 py-10 text-[13px] leading-relaxed text-ink-3">
           <p className="font-semibold text-ink-2">이 서비스는 일반적인 제도 변경을 안내합니다.</p>
           <p className="mt-1.5 max-w-reading">

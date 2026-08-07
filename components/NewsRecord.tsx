@@ -19,11 +19,11 @@ export function NewsRecord({ item }: { item: NewsItem }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="group -mx-3 flex gap-3 rounded-soft px-3 py-3 transition-colors hover:bg-surface-sunk"
+      className="group flex gap-3 px-4 py-3.5 transition-colors hover:bg-surface-sunk"
     >
       <span
         aria-hidden
-        className="mt-[9px] h-0 w-3 shrink-0 border-t border-dashed border-rule-strong"
+        className="mt-[11px] h-0 w-3 shrink-0 border-t border-dashed border-rule-strong"
       />
 
       <div className="min-w-0 flex-1">
@@ -40,7 +40,7 @@ export function NewsRecord({ item }: { item: NewsItem }) {
           </p>
         ) : null}
 
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3">
+        <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-3">
           <span className="break-all font-medium">{hostOf(item.url)}</span>
           {item.matched_query ? (
             <>

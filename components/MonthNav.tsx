@@ -191,15 +191,15 @@ function Pill({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`shrink-0 whitespace-nowrap rounded-sharp border px-2.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
+      className={`shrink-0 whitespace-nowrap rounded-[4px] border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
         on
-          ? 'border-ink bg-ink text-surface'
-          : 'border-rule-strong bg-surface text-ink-2 hover:border-ink hover:text-ink'
+          ? 'border-accent bg-accent text-white'
+          : 'border-rule-strong bg-surface text-ink-2 hover:border-accent hover:text-accent'
       }`}
     >
       {label}
       {count !== undefined ? (
-        <span className={`tabular ml-1.5 text-[11px] ${on ? 'text-white/70' : 'text-ink-3'}`}>
+        <span className={`tabular ml-1.5 text-[12px] ${on ? 'text-white/75' : 'text-ink-3'}`}>
           {count}
         </span>
       ) : null}

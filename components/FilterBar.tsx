@@ -116,7 +116,7 @@ export function FilterBar() {
             defaultValue={params.get('q') ?? ''}
             placeholder="상담 내용으로 검색 — 학원 4대보험, 배달 원천징수"
             aria-label="키워드 검색"
-            className="h-10 min-w-0 flex-1 rounded-sharp border border-rule-strong bg-surface px-3.5 text-[14.5px] text-ink placeholder:text-ink-3 focus:border-ink focus:outline-none"
+            className="h-10 min-w-0 flex-1 rounded-[4px] border border-rule-strong bg-surface px-3.5 text-[15px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
           />
           <button type="submit" className="btn-primary h-10 shrink-0 py-0">
             검색
@@ -127,10 +127,10 @@ export function FilterBar() {
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
           aria-expanded={moreOpen}
-          className={`h-10 shrink-0 whitespace-nowrap rounded-sharp border px-3 text-[12.5px] font-semibold transition-colors ${
+          className={`h-10 shrink-0 whitespace-nowrap rounded-[4px] border px-3.5 text-[13px] font-semibold transition-colors ${
             narrowCount > 0
-              ? 'border-ink bg-ink text-surface'
-              : 'border-rule-strong bg-surface text-ink-2 hover:border-ink hover:text-ink'
+              ? 'border-accent bg-accent text-white'
+              : 'border-rule-strong bg-surface text-ink-2 hover:border-accent hover:text-accent'
           }`}
         >
           좁혀 보기
@@ -239,10 +239,10 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`shrink-0 whitespace-nowrap rounded-sharp border px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${
+      className={`shrink-0 whitespace-nowrap rounded-[4px] border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
         active
-          ? 'border-ink bg-ink text-surface'
-          : 'border-rule-strong bg-surface text-ink-2 hover:border-ink hover:text-ink'
+          ? 'border-accent bg-accent text-white'
+          : 'border-rule-strong bg-surface text-ink-2 hover:border-accent hover:text-accent'
       }`}
     >
       {label}

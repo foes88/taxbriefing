@@ -26,6 +26,10 @@ const config: Config = {
           DEFAULT: 'var(--surface)',
           sunk: 'var(--surface-sunk)',
         },
+        band: {
+          DEFAULT: 'var(--band)',
+          2: 'var(--band-2)',
+        },
         ink: {
           DEFAULT: 'var(--ink)',
           2: 'var(--ink-2)',
@@ -34,6 +38,10 @@ const config: Config = {
         rule: {
           DEFAULT: 'var(--rule)',
           strong: 'var(--rule-strong)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          soft: 'var(--accent-soft)',
         },
         seal: 'var(--seal)',
         state: {
@@ -45,10 +53,10 @@ const config: Config = {
         },
       },
       fontSize: {
-        display: ['2.125rem', { lineHeight: '1.24', letterSpacing: '-0.025em', fontWeight: '800' }],
-        headline: ['1.25rem', { lineHeight: '1.4', letterSpacing: '-0.016em', fontWeight: '700' }],
+        display: ['2.25rem', { lineHeight: '1.22', letterSpacing: '-0.028em', fontWeight: '800' }],
+        headline: ['1.375rem', { lineHeight: '1.38', letterSpacing: '-0.018em', fontWeight: '700' }],
         /** 목록 제목. 훑을 때 가장 먼저 읽히는 크기다. */
-        record: ['1.0938rem', { lineHeight: '1.46', letterSpacing: '-0.013em', fontWeight: '700' }],
+        record: ['1.125rem', { lineHeight: '1.44', letterSpacing: '-0.014em', fontWeight: '700' }],
       },
       maxWidth: {
         /** 페이지 골격. 데스크톱에서 양옆이 비지 않을 만큼 넓다. */
