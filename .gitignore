@@ -30,3 +30,6 @@ out/
 Thumbs.db
 .idea/
 .vscode/
+
+# 백엔드 감시 실행기가 남기는 런타임 로그 (run-api.cmd)
+backend/api.log
