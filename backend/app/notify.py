@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import sys
 from uuid import UUID
 
@@ -94,11 +95,12 @@ def collect_cards(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="일일 세무 브리핑 텔레그램 발송")
     parser.add_argument("--hours", type=int, default=24, help="최근 N시간 게시분 (기본 24)")
+    parser.add_argument("--limit", type=int, default=15, help="최대 카드 수 (기본 15)")
     parser.add_argument("--send", action="store_true", help="실제 전송 (기본은 미리보기)")
     parser.add_argument("--chat-id", help="수신 chat_id (기본: 환경변수)")
     parser.add_argument(
         "--site",
-        default="https://taxbriefing.example",
+        default=os.environ.get("TAXBRIEFING_SITE_URL", "https://taxbriefing.vercel.app"),
         help="상세 링크 기준 주소",
     )
     args = parser.parse_args(argv)
@@ -111,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
 
     db = SessionLocal()
     try:
-        cards = collect_cards(db, since=since, site_base=args.site)
+        cards = collect_cards(db, since=since, site_base=args.site, limit=args.limit)
     finally:
         db.close()
 

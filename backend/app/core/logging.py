@@ -70,6 +70,12 @@ def _mask_processor(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, An
 
 def configure_logging(*, debug: bool = False) -> None:
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+
+    # httpx 는 INFO 로 요청 URL 을 통째로 찍는다. 텔레그램 Bot API 는 토큰이
+    # 경로에 들어가므로(/bot<TOKEN>/sendMessage) 봇 토큰이 로그에 그대로 남는다.
+    # GitHub Actions 로그는 저장소 접근 권한이 있으면 누구나 본다.
+    # 우리가 남기는 구조화 로그에는 필요한 정보가 이미 다 있다.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

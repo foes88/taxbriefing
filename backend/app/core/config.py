@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     naver_client_id: str | None = None
     naver_client_secret: str | None = None
 
+    # 텔레그램 발송 (ADR-001 — 알림 채널).
+    # 비밀키는 DB 에 저장하지 않는다 (§12.1). 환경변수·.env 에서만 읽는다.
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
     # 수집 SSRF 방어 (§12.3, AT-14).
     collector_max_redirects: int = 3
     collector_timeout_seconds: float = 20.0

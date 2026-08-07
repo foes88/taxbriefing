@@ -14,6 +14,7 @@ from typing import Protocol
 
 import httpx
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.domain.enums import Channel
 
@@ -139,9 +140,19 @@ class TelegramAdapter:
         timeout: float = 20.0,
         client: httpx.Client | None = None,
     ) -> None:
-        self._bot_token = bot_token or os.environ.get("TAXBRIEFING_TELEGRAM_BOT_TOKEN")
-        self._default_chat_id = default_chat_id or os.environ.get(
-            "TAXBRIEFING_TELEGRAM_CHAT_ID"
+        # 환경변수를 먼저 본다. 컨테이너·CI 에서는 .env 파일이 없고 환경변수만 있다.
+        # 없으면 설정(.env)에서 읽는다 — 로컬은 반대로 .env 만 있다.
+        # 한쪽만 읽으면 "분명히 넣었는데 설정 안 됐다"는 말이 나온다. 실제로 나왔다.
+        settings = get_settings()
+        self._bot_token = (
+            bot_token
+            or os.environ.get("TAXBRIEFING_TELEGRAM_BOT_TOKEN")
+            or settings.telegram_bot_token
+        )
+        self._default_chat_id = (
+            default_chat_id
+            or os.environ.get("TAXBRIEFING_TELEGRAM_CHAT_ID")
+            or settings.telegram_chat_id
         )
         self._timeout = timeout
         self._client = client
