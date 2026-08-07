@@ -93,25 +93,46 @@ https://taxbriefing.vercel.app,https://taxbriefing-git-main-foes88.vercel.app
 돌리면 원문은 채워지지만 **AI 요약과 업종 분류를 처음부터 다시 만들어야 하고**,
 같은 원문에 같은 답이 나온다는 보장이 없다 (모델·프롬프트 버전이 다르면 다르다).
 
-```bash
-# 1. 로컬 전체 덤프 (스키마 제외 — 마이그레이션이 이미 만들었다)
-docker exec taxbriefing-db pg_dump -U taxbriefing -d taxbriefing \
-  --data-only --disable-triggers > dump.sql
+**데이터만 옮기는 방식(`--data-only`)은 쓸 수 없다.**
 
-# 2. Neon 으로 적재
-psql "postgresql://user:pw@ep-xxx.neon.tech/neondb?sslmode=require" < dump.sql
+`raw_contents` ↔ `raw_content_versions` 처럼 서로를 가리키는 외래키가 있어서
+어떤 순서로 넣어도 한쪽이 먼저 걸린다. 보통은 적재 동안 외래키 검사를 끄지만,
+**Neon 의 소유자 롤에는 그 권한이 없다.**
+
+```
+permission denied to set parameter "session_replication_role"
 ```
 
-`psql` 이 없으면 Neon 대시보드의 **SQL Editor** 에 붙여넣어도 된다.
+`--disable-triggers` 도 같은 이유로 막힌다. 전체 덤프는 이 문제를 애초에
+만들지 않는다 — pg_dump 가 테이블 생성 → 데이터 적재 → 제약 추가 순으로
+내보내므로, 데이터가 다 들어간 뒤에 외래키가 걸린다.
 
-> 순서가 중요하다. **Render 첫 배포(마이그레이션 실행)가 끝난 뒤** 적재한다.
-> 빈 DB 에 데이터부터 넣으면 테이블이 없어 실패한다.
+```bash
+# 1. 전체 덤프. 덤프에 적힌 소유자 롤은 Neon 에 없으므로 권한 정보는 뺀다.
+docker exec taxbriefing-db pg_dump -U taxbriefing -d taxbriefing \
+  --no-owner --no-privileges --column-inserts > full.sql
 
-적재 후 확인:
+# 2. Neon 을 비우고 복원
+psql "postgresql://…@ep-xxx.neon.tech/neondb?sslmode=require" \
+  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+psql "postgresql://…@ep-xxx.neon.tech/neondb?sslmode=require" < full.sql
+```
+
+> **Render 배포보다 먼저 해도 된다.** 전체 덤프에는 스키마와 `alembic_version`
+> 이 함께 들어 있어 마이그레이션 상태까지 그대로 옮겨진다.
+> 이 경우 Render 의 `RUN_MIGRATIONS` 는 할 일이 없어 그냥 통과한다.
+
+**옮겼다는 말로 끝내지 않는다.** 같은 질문을 양쪽에 던져 답이 같은지 본다.
 
 ```sql
+SELECT count(*) FROM sources;
+SELECT count(*) FROM raw_contents;
 SELECT count(*) FROM tax_contents WHERE workflow = 'PUBLISHED';
+SELECT count(*) FROM ai_analyses;
+SELECT count(*) FROM alembic_version;
 ```
+
+하나라도 다르면 옮기기가 끝난 게 아니다.
 
 ---
 
