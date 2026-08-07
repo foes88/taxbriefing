@@ -1,16 +1,16 @@
-import { formatDateCompact } from '@/lib/format';
 import type { NewsItem } from '@/lib/types';
 
 /**
  * 언론 보도 한 건.
  *
- * `ContentRecord` 와 두 가지가 다르고, 둘 다 의도한 것이다.
+ * 정책 항목과 세 가지가 다르고, 셋 다 의도한 것이다.
  *
- * 1. 링크가 **바깥으로 나간다.** 우리 상세 페이지가 없다. 상세 페이지를 만들면
+ * 1. 링크가 **바깥으로 나간다.** 우리 상세 페이지가 없다. 상세를 만들면
  *    "우리가 정리한 내용"처럼 보이는데, 정리한 적이 없다.
- * 2. 거터 구분선이 **점선**이다. 확정된 정보의 실선과 눈으로 구분된다.
+ * 2. 도장도 시행일도 없다. 확인한 게 없으니 확인한 척하는 표시를 못 붙인다.
+ * 3. 제목 앞에 **점선 표시**가 붙는다. 확정 기록의 실선과 눈으로 구분된다.
  *
- * 본문은 애초에 저장하지 않았으므로(§NFR-015) 여기서 보여줄 수 있는 것은
+ * 본문은 애초에 저장하지 않았으므로(§NFR-015) 보여줄 수 있는 것은
  * 제목·요약 한두 줄·링크뿐이다.
  */
 export function NewsRecord({ item }: { item: NewsItem }) {
@@ -19,46 +19,38 @@ export function NewsRecord({ item }: { item: NewsItem }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="group -mx-3 block rounded-soft px-3 py-3 transition-colors hover:bg-surface-sunk"
+      className="group -mx-3 flex gap-3 rounded-soft px-3 py-3 transition-colors hover:bg-surface-sunk"
     >
-      <div className="flex gap-3 sm:gap-4">
-        <div className="w-[3.5rem] shrink-0 pt-[2px] sm:w-[4rem]">
-          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-3">보도</div>
-          <div className="tabular mt-0.5 text-[13px] font-bold leading-tight text-ink-2">
-            {item.published_at ? formatDateCompact(item.published_at) : '미상'}
-          </div>
-        </div>
+      <span
+        aria-hidden
+        className="mt-[9px] h-0 w-3 shrink-0 border-t border-dashed border-rule-strong"
+      />
 
-        {/* 점선 — 이 항목은 확정되지 않았다는 표시 */}
-        <div
-          aria-hidden
-          className="w-px shrink-0 border-l border-dashed border-rule-strong"
-        />
+      <div className="min-w-0 flex-1">
+        <h3 className="text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
+          {item.title}
+          <span aria-hidden className="ml-1.5 text-[12px] font-normal text-ink-3">
+            ↗
+          </span>
+        </h3>
 
-        <div className="min-w-0 flex-1">
-          <h3 className="text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
-            {item.title}
-            <span aria-hidden className="ml-1.5 text-[13px] font-normal text-ink-3">
-              ↗
-            </span>
-          </h3>
-
-          {item.summary ? (
-            <p className="mt-1.5 line-clamp-2 max-w-reading text-[15px] leading-relaxed text-ink-2">
-              {item.summary}
-            </p>
-          ) : null}
-
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3">
-            <span className="break-all">{hostOf(item.url)}</span>
-            {item.matched_query ? (
-              <>
-                <span aria-hidden>·</span>
-                <span>{item.matched_query}</span>
-              </>
-            ) : null}
+        {item.summary ? (
+          <p className="mt-1 line-clamp-2 max-w-reading text-[14px] leading-relaxed text-ink-2">
+            {item.summary}
           </p>
-        </div>
+        ) : null}
+
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3">
+          <span className="break-all font-medium">{hostOf(item.url)}</span>
+          {item.matched_query ? (
+            <>
+              <span aria-hidden className="text-rule-strong">
+                ·
+              </span>
+              <span>{item.matched_query}</span>
+            </>
+          ) : null}
+        </p>
       </div>
     </a>
   );

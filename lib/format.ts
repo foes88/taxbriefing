@@ -100,3 +100,56 @@ export function recencyGroup(updatedAt: string): '오늘' | '이번 주' | '지�
   if (ago <= 7) return '이번 주';
   return '지난 소식';
 }
+
+/** "2026년 7월 1일 (화)" — 일자 묶음의 표제. */
+export function formatDateHeading(value: string | null): string {
+  if (!value) return '공포일 미상';
+  const date = toDate(value);
+  if (!date) return '공포일 미상';
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    timeZone: SEOUL,
+  }).format(date);
+}
+
+/**
+ * 일자별로 묶는다.
+ *
+ * 예전에는 116개 행마다 왼쪽에 날짜 거터를 반복해 그렸다. 같은 날 공포된
+ * 개정이 여러 건이면 같은 숫자가 연달아 나오고, 그 열 전체가 폭만 차지한 채
+ * 아무것도 말하지 않는다. 관보는 날짜가 **표제**이고 그 아래에 항목이 딸린다.
+ *
+ * 날짜를 모르는 건은 맨 뒤에 따로 묶는다. 없는 날짜를 오늘로 치거나
+ * 맨 앞에 두면 "최신"으로 읽힌다.
+ */
+export function groupByDate<T>(
+  items: T[],
+  dateOf: (item: T) => string | null,
+): { date: string | null; heading: string; items: T[] }[] {
+  const buckets = new Map<string, T[]>();
+  const undated: T[] = [];
+
+  for (const item of items) {
+    const raw = dateOf(item);
+    if (!raw) {
+      undated.push(item);
+      continue;
+    }
+    const key = raw.slice(0, 10);
+    buckets.set(key, [...(buckets.get(key) ?? []), item]);
+  }
+
+  const groups: { date: string | null; heading: string; items: T[] }[] = Array.from(
+    buckets.entries(),
+  )
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, list]) => ({ date, heading: formatDateHeading(date), items: list }));
+
+  if (undated.length > 0) {
+    groups.push({ date: null, heading: '공포일 미상', items: undated });
+  }
+  return groups;
+}
