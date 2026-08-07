@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { Masthead } from '@/components/Masthead';
 import { AuthorityTag, Caveat, DeadlineMark, RiskMark, StatusSeal } from '@/components/Seal';
 import { ApiRequestError, publicApi } from '@/lib/api';
-import { daysUntil, formatDate, formatDateTime } from '@/lib/format';
+import { daysUntil, effectiveLabel, formatDate, formatDateTime } from '@/lib/format';
 import type { PublicContentDetail } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -46,10 +46,18 @@ export default async function ContentDetailPage({
 
   const deadline = daysUntil(content.application_end);
   const actions = list('required_actions');
+  const effective = effectiveLabel(content.effective_date);
+
+  // 목록과 같은 규칙 — 요약이 제목을 통째로 품고 있으면 제목을 그대로 쓴다.
+  const summary = content.one_line_summary?.trim();
+  const strip = (s: string) => s.replace(/[「」·\s()]/g, '');
+  const useSummary = !!summary && !strip(summary).includes(strip(content.title));
+  const headline = useSummary ? summary! : content.title;
+  const statute = useSummary ? content.title : null;
 
   return (
     <div className="min-h-screen">
-      <Masthead compact />
+      <Masthead active="policy" />
 
       <main className="mx-auto max-w-page px-4 pb-20">
         <nav className="py-4">
@@ -73,8 +81,15 @@ export default async function ContentDetailPage({
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-8">
           {/* ── 본문 ── */}
           <article className="min-w-0 border border-rule bg-surface">
+            {/*
+              **무엇이 바뀌는지를 제목으로 삼는다.**
+              텔레그램 링크를 타고 들어온 사장님이 처음 보는 줄이
+              "국세기본법 시행령 (일부개정)"이면 자기와 무슨 상관인지 알 수 없다.
+              법령명은 출처지 제목이 아니다. 요약이 없을 때만 법령명이 제목이 된다 —
+              없는 문장을 지어내지 않는다.
+            */}
             <header className="border-b border-rule px-5 py-7 sm:px-8">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <RiskMark risk={content.risk_level} />
                 <StatusSeal status={content.legal_status} label={content.status_label} />
                 {deadline !== null && deadline >= 0 && deadline <= 7 ? (
@@ -82,13 +97,20 @@ export default async function ContentDetailPage({
                 ) : null}
               </div>
 
-              <h1 className="mt-3.5 max-w-reading text-display text-ink">{content.title}</h1>
+              <h1 className="mt-3.5 max-w-reading text-display text-ink">{headline}</h1>
 
-              {content.one_line_summary ? (
-                <p className="mt-3.5 max-w-reading text-[16px] leading-relaxed text-ink-2">
-                  {content.one_line_summary}
-                </p>
+              {statute ? (
+                <p className="mt-3 text-[14px] font-medium text-ink-3">{statute}</p>
               ) : null}
+
+              {/* 언제부터인가 — 사장님이 가장 먼저 묻는 것을 제목 바로 아래에 둔다. */}
+              <p
+                className={`mt-4 text-[16px] font-bold ${
+                  effective.tone === 'soon' ? 'text-seal' : 'text-ink'
+                }`}
+              >
+                {effective.text}
+              </p>
 
               {content.status_caveat ? (
                 <p className="mt-4 border-t border-rule pt-3.5">

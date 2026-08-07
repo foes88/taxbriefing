@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { Caveat, DeadlineMark, RiskMark, StatusSeal } from './Seal';
-import { daysUntil, formatDateShort } from '@/lib/format';
+import { daysUntil, effectiveLabel } from '@/lib/format';
 import type { PublicContentSummary } from '@/lib/types';
 
 /**
@@ -10,26 +10,47 @@ import type { PublicContentSummary } from '@/lib/types';
  * **LeadItem** — "먼저 볼 것". 긴급·중요만 여기 온다.
  * **RecordRow** — "전체 기록". 일자 묶음 안에 들어가는 한 줄.
  *
- * 왜 나눴나. 예전에는 116건이 전부 같은 크기로 늘어서 있었다. 모두가 같은
- * 무게면 무게가 없는 것과 같고, 사장님은 어디부터 봐야 할지 알 수 없다.
- * "세무전문가가 검수했다"가 이 서비스의 약속인데 그 판단이 화면에 드러나지
- * 않았다. 판단을 크기로 말한다.
+ * 판단을 크기로 말한다. 예전에는 108건이 전부 같은 크기로 늘어서 있었고,
+ * 모두가 같은 무게면 무게가 없는 것과 같다. "세무전문가가 검수했다"가
+ * 이 서비스의 약속인데 그 판단이 화면에 드러나지 않았다.
  *
- * 날짜는 RecordRow 에 반복하지 않는다. 일자 묶음의 표제가 이미 말하고 있다.
+ * **제목과 요약을 뒤집었다.**
+ * 목록을 훑을 때 첫 줄이 "국세기본법 시행령 (일부개정)"이면 사장님은
+ * 자기와 무슨 상관인지 알 수 없다. 정작 답은 그 아래 요약에 있었다.
+ * 법령명은 **출처**지 제목이 아니다. 그래서 무엇이 바뀌는지를 앞에 놓고,
+ * 법령명은 아래 메타 줄로 내렸다.
+ *
+ * 요약이 없으면 법령명이 제목이 된다 — 없는 문장을 지어내지 않는다.
  */
 
-function summaryOf(item: PublicContentSummary): string | null {
-  const text = item.one_line_summary?.trim();
-  if (!text) return null;
-  // 요약이 제목을 그대로 되풀이하면 읽을 게 없다.
+/**
+ * 훑을 때 읽을 한 줄과, 그 아래 출처 표기.
+ *
+ * 요약이 **제목을 통째로 품고 있으면 제목을 그대로 쓴다.**
+ * AI 요약이 아직 없는 건에는 자동 생성 문구가 들어 있는데,
+ * 그게 이렇게 생겼다.
+ *
+ *   「소득세법 (일부개정)」이(가) 일부개정되어 2026년 7월 1일부터 시행됩니다.
+ *
+ * 이걸 제목 자리에 올리면 법령명보다 길기만 하고 새로 알려주는 게 없다.
+ * 시행일은 바로 아래 줄이 이미 말하고 있어 같은 말을 두 번 하게 된다.
+ */
+function headlineOf(item: PublicContentSummary): { headline: string; statute: string | null } {
+  const summary = item.one_line_summary?.trim();
+  if (!summary) return { headline: item.title, statute: null };
+
   const strip = (s: string) => s.replace(/[「」·\s()]/g, '');
-  return strip(text).includes(strip(item.title)) ? null : text;
+  if (strip(summary).includes(strip(item.title))) {
+    return { headline: item.title, statute: null };
+  }
+  return { headline: summary, statute: item.title };
 }
 
 export function LeadItem({ item, index }: { item: PublicContentSummary; index: number }) {
   const deadline = daysUntil(item.application_end);
   const showDeadline = deadline !== null && deadline >= 0 && deadline <= 7;
-  const summary = summaryOf(item);
+  const { headline, statute } = headlineOf(item);
+  const effective = effectiveLabel(item.effective_date);
 
   return (
     <Link
@@ -48,27 +69,30 @@ export function LeadItem({ item, index }: { item: PublicContentSummary; index: n
       </span>
 
       <div className="min-w-0 flex-1">
-        <h3 className="text-headline text-ink decoration-1 underline-offset-4 group-hover:underline">
+        <h3 className="max-w-reading text-headline text-ink decoration-1 underline-offset-4 group-hover:underline">
           <RiskMark risk={item.risk_level} />
           {item.corrected ? (
             <span className="tag mr-2 border border-seal align-[2px] text-seal">정정</span>
           ) : null}
-          {item.title}
+          {headline}
         </h3>
 
-        {summary ? (
-          <p className="mt-2 max-w-reading text-[15.5px] leading-relaxed text-ink-2">{summary}</p>
-        ) : null}
-
         <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
-          <span className="tabular font-bold text-ink-2">
-            시행 {item.effective_date ? formatDateShort(item.effective_date) : '미정'}
+          <span
+            className={`font-bold ${
+              effective.tone === 'soon' ? 'text-seal' : 'text-ink-2'
+            }`}
+          >
+            {effective.text}
           </span>
           <StatusSeal status={item.legal_status} label={item.status_label} />
-          {item.industry_labels.map((name) => (
-            <span key={name}>{name}</span>
-          ))}
           {showDeadline ? <DeadlineMark days={deadline} /> : null}
+        </p>
+
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-3">
+          {statute ? <span className="font-medium">{statute}</span> : null}
+          {statute && item.industry_labels.length > 0 ? <Dot /> : null}
+          {item.industry_labels.join(' · ')}
         </p>
 
         {item.status_caveat ? (
@@ -81,41 +105,56 @@ export function LeadItem({ item, index }: { item: PublicContentSummary; index: n
   );
 }
 
-/** 일자 묶음 안의 한 줄. 밀도가 목적이라 요약은 한 줄로 자른다. */
+/** 일자 묶음 안의 한 줄. 두 줄로 끝난다 — 제목 한 줄, 메타 한 줄. */
 export function RecordRow({ item }: { item: PublicContentSummary }) {
   const deadline = daysUntil(item.application_end);
   const showDeadline = deadline !== null && deadline >= 0 && deadline <= 7;
-  const summary = summaryOf(item);
+  const { headline, statute } = headlineOf(item);
+  const effective = effectiveLabel(item.effective_date);
 
   return (
     <Link
       href={`/contents/${item.id}`}
       className="group block px-4 py-3.5 transition-colors hover:bg-surface-sunk sm:px-5"
     >
-      <h3 className="text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
+      <h3 className="max-w-reading text-record text-ink decoration-1 underline-offset-4 group-hover:underline">
         <RiskMark risk={item.risk_level} />
         {item.corrected ? (
           <span className="tag mr-2 border border-seal align-[2px] text-seal">정정</span>
         ) : null}
-        {item.title}
+        {headline}
       </h3>
 
-      {summary ? (
-        <p className="mt-1.5 line-clamp-1 max-w-reading text-[14.5px] leading-relaxed text-ink-2">
-          {summary}
-        </p>
-      ) : null}
-
-      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
-        <span className="tabular font-semibold text-ink-2">
-          시행 {item.effective_date ? formatDateShort(item.effective_date) : '미정'}
+      <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-ink-3">
+        <span
+          className={`font-semibold ${effective.tone === 'soon' ? 'text-seal' : 'text-ink-2'}`}
+        >
+          {effective.text}
         </span>
+        <Dot />
         <StatusSeal status={item.legal_status} label={item.status_label} />
+        {statute ? (
+          <>
+            <Dot />
+            <span>{statute}</span>
+          </>
+        ) : null}
         {item.industry_labels.map((name) => (
-          <span key={name}>{name}</span>
+          <span key={name} className="flex items-center gap-2.5">
+            <Dot />
+            {name}
+          </span>
         ))}
         {showDeadline ? <DeadlineMark days={deadline} /> : null}
       </p>
     </Link>
+  );
+}
+
+function Dot() {
+  return (
+    <span aria-hidden className="text-rule-strong">
+      ·
+    </span>
   );
 }

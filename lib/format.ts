@@ -101,6 +101,31 @@ export function recencyGroup(updatedAt: string): '오늘' | '이번 주' | '지�
   return '지난 소식';
 }
 
+/**
+ * 시행일을 사람이 쓰는 말로.
+ *
+ * "시행 26.07.01" 은 정확하지만, 사장님이 가장 먼저 묻는 것은
+ * "그래서 언제부터냐"이지 날짜 문자열이 아니다. 이미 지난 것과 앞으로 올 것을
+ * 같은 모양으로 적으면 매번 오늘 날짜와 머리로 비교해야 한다.
+ *
+ * 날짜가 없으면 **지어내지 않는다** (§10.4).
+ */
+export function effectiveLabel(value: string | null): {
+  text: string;
+  tone: 'past' | 'soon' | 'future' | 'unknown';
+} {
+  if (!value) return { text: '시행일 미정', tone: 'unknown' };
+
+  const days = daysUntil(value);
+  if (days === null) return { text: '시행일 미정', tone: 'unknown' };
+
+  const date = formatDate(value);
+  if (days < 0) return { text: `${date}부터 시행 중`, tone: 'past' };
+  if (days === 0) return { text: `오늘(${date})부터 시행`, tone: 'soon' };
+  if (days <= 30) return { text: `${days}일 뒤 시행 · ${date}`, tone: 'soon' };
+  return { text: `${date} 시행 예정`, tone: 'future' };
+}
+
 /** "2026년 7월 1일 (화)" — 일자 묶음의 표제. */
 export function formatDateHeading(value: string | null): string {
   if (!value) return '공포일 미상';
