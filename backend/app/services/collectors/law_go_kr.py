@@ -34,9 +34,8 @@ ADAPTER_VERSION = "1.0.0"
 PUBLIC_LAW_URL = "https://www.law.go.kr/법령"
 PUBLIC_ADMRUL_URL = "https://www.law.go.kr/행정규칙"
 
-#: MVP 수집 대상 세법. 부록 A 원칙에 따라 하드코딩하지 않고
-#: sources.settings["queries"] 로 덮어쓸 수 있다.
-DEFAULT_TAX_QUERIES: tuple[str, ...] = (
+#: 세법.
+TAX_LAWS: tuple[str, ...] = (
     "소득세법",
     "법인세법",
     "부가가치세법",
@@ -51,6 +50,26 @@ DEFAULT_TAX_QUERIES: tuple[str, ...] = (
     "인지세법",
     "증권거래세법",
 )
+
+#: 4대보험.
+#:
+#: 세법만 모으면 "학원 원장님이 4대보험 물어보는데" 를 검색해도 0건이 나온다.
+#: 실제로 그랬다. 사장님에게 4대보험은 세금과 같은 고지서로 오는 부담이고,
+#: 상담에서 세금과 따로 오지 않는다. 소관부처가 다르다는 건 우리 사정이지
+#: 사장님 사정이 아니다.
+#:
+#: 요율은 각 보험법이 아니라 보험료징수법과 그 시행령에 있다. 그래서 넣는다.
+INSURANCE_LAWS: tuple[str, ...] = (
+    "국민연금법",
+    "국민건강보험법",
+    "고용보험법",
+    "산업재해보상보험법",
+    "고용보험 및 산업재해보상보험의 보험료징수 등에 관한 법률",
+)
+
+#: MVP 수집 대상. 부록 A 원칙에 따라 하드코딩하지 않고
+#: sources.settings["queries"] 로 덮어쓸 수 있다.
+DEFAULT_TAX_QUERIES: tuple[str, ...] = TAX_LAWS + INSURANCE_LAWS
 
 #: 행정규칙(고시·훈령·예규) 수집 대상 기관.
 DEFAULT_ADMRUL_QUERIES: tuple[str, ...] = ("국세청", "재정경제부")
@@ -323,7 +342,22 @@ class LawCollector:
                 stats.fail(f"search:{query}", exc)
                 continue
 
-            for item in items:
+            # **오래된 것부터 넣는다.**
+            #
+            # 한 법의 여러 개정을 같은 canonical_url 로 모으므로(개정은 새 기록이
+            # 아니라 새 버전이다), 마지막에 넣은 것이 현재 버전이 된다.
+            # 지금은 API 가 법 하나당 현행 한 건만 주므로 순서가 문제되지 않지만,
+            # 검색어나 파라미터가 바뀌어 한 법의 여러 개정이 함께 오면 최신순
+            # 응답을 그대로 넣는 순간 가장 오래된 개정이 현재로 남는다.
+            #
+            # 날짜 없는 항목은 맨 앞에 넣어 현재 버전이 되지 않게 한다.
+            # 날짜를 모르는 것을 최신으로 취급하면 아는 것이 밀려난다.
+            ordered = sorted(
+                items,
+                key=lambda i: (i.promulgation_date is not None, i.promulgation_date or dt.date.min),
+            )
+
+            for item in ordered:
                 stats.discovered += 1
 
                 # 공포일이 기준일보다 오래된 것은 건너뛴다. 이미 수집했거나 관심 밖이다.

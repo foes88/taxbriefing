@@ -61,6 +61,9 @@ def collect_cards(
             TaxContent.workflow.in_(PUBLIC_STATES),
             TaxContent.tenant_id.is_(None),
             TaxContent.updated_at >= since,
+            # 사업자와 무관하다고 판단된 건은 보내지 않는다. 웹에서 숨긴 것을
+            # 텔레그램으로 보내면 숨긴 의미가 없다 — 오히려 알림으로 밀어넣는 셈이다.
+            ~(TaxContent.search_text.is_not(None) & (TaxContent.industries == [])),
         )
         .order_by(TaxContent.risk.desc(), TaxContent.updated_at.desc())
         .limit(limit)

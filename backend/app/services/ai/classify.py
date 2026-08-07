@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.logging import get_logger
@@ -85,17 +86,33 @@ def build_search_text(title: str, one_line: str | None, body: dict[str, Any]) ->
     return "\n".join(unique)
 
 
+@dataclass(frozen=True)
+class Classification:
+    """분류 결과.
+
+    `codes` 가 비었다는 것은 **사업자와 무관하다고 판단했다**는 뜻이다.
+    공무원 인사규정·기관 내부 훈령이 여기 해당한다.
+
+    호출이 실패했을 때는 이 객체 대신 `None` 을 준다. 둘을 같은 값으로 두면
+    "판단해보니 무관"과 "판단을 못 했음"이 구분되지 않고, 그러면 API 가
+    잠깐 죽은 사이에 멀쩡한 개정이 화면에서 사라진다.
+    """
+
+    codes: list[str]
+    reason: str
+
+
 def classify_industries(
     title: str,
     one_line: str | None,
     body: dict[str, Any],
     *,
     provider: GroqProvider | None = None,
-) -> tuple[list[str], str]:
-    """업종 코드 목록과 판단 이유를 돌려준다.
+) -> Classification | None:
+    """업종을 판단한다. 실패하면 None.
 
-    실패하면 빈 목록을 준다. **추측으로 채우지 않는다** — 틀린 업종 태그는
-    "우리 업종 건 아니네" 하고 넘기게 만들어서, 아예 없는 것보다 나쁘다.
+    **추측으로 채우지 않는다** — 틀린 업종 태그는 "우리 업종 건 아니네" 하고
+    넘기게 만들어서, 아예 없는 것보다 나쁘다.
     """
     provider = provider or GroqProvider()
 
@@ -128,6 +145,9 @@ def classify_industries(
         data = json.loads(payload["content"])
     except (GroqError, json.JSONDecodeError, KeyError) as exc:
         logger.warning("classify.failed", title=title[:60], error=str(exc)[:200])
-        return [], ""
+        return None
 
-    return normalize(data.get("industries")), str(data.get("reason") or "").strip()[:300]
+    return Classification(
+        codes=normalize(data.get("industries")),
+        reason=str(data.get("reason") or "").strip()[:300],
+    )

@@ -67,17 +67,24 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       <SectionTabs active="policy" />
 
       <main className="mx-auto max-w-page px-4 pb-20">
-        <section className="pb-2 pt-8">
-          <p className="gutter-date">{todayLabel()}</p>
-          <h1 className="mt-2 text-display text-ink">
-            {activeMonth
-              ? `${activeMonth.label} 세무정보`
-              : rangeLabel
-                ? '기간 검색 결과'
-                : '오늘 확인할 세무정보'}
-          </h1>
-          <p className="mt-2.5 max-w-[36rem] text-[15px] leading-relaxed text-ink-2">
-            법령·관보 등 <strong className="font-semibold text-ink">공식 원문</strong>으로 사실을
+        {/*
+          제목 블록은 한 덩어리로 붙인다. 날짜·제목·설명이 각각 여백을 갖고
+          떨어져 있으면 화면 첫 절반이 안내문으로 채워지고, 정작 사장님이
+          보러 온 목록은 스크롤해야 나온다.
+        */}
+        <section className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-3 pt-8">
+          <div>
+            <p className="gutter-date">{todayLabel()}</p>
+            <h1 className="mt-1.5 text-display text-ink">
+              {activeMonth
+                ? `${activeMonth.label} 세무정보`
+                : rangeLabel
+                  ? '기간 검색 결과'
+                  : '오늘 확인할 세무정보'}
+            </h1>
+          </div>
+          <p className="max-w-[24rem] text-[13.5px] leading-relaxed text-ink-3">
+            법령·관보 등 <strong className="font-semibold text-ink-2">공식 원문</strong>으로 사실을
             확인하고, 세무전문가가 검수한 내용만 올립니다.
           </p>
         </section>
@@ -121,23 +128,23 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               <ErrorState message={error} />
             ) : feed && feed.items.length > 0 ? (
               <>
-                <div className="mt-4 flex items-baseline justify-between gap-3 border-b border-rule-strong pb-2">
-                  <h2 className="min-w-0 text-[13px] font-bold tracking-tight text-ink">
+                <div className="mt-5 flex items-center justify-between gap-3 border-b-2 border-ink pb-2">
+                  <h2 className="section-mark min-w-0">
                     {activeIndustries.length > 0
                       ? activeIndustries.map((i) => i.label).join(' · ')
                       : activeMonth
                         ? `${activeMonth.label} 공포분`
                         : (rangeLabel ?? '전체')}
-                    {activeMonth && activeIndustries.length === 0 ? (
-                      <span className="ml-2 text-[11.5px] font-medium text-ink-3">
-                        시행일은 이보다 늦을 수 있습니다
-                      </span>
-                    ) : null}
                   </h2>
-                  <span className="tabular shrink-0 text-[12px] font-semibold text-ink-3">
+                  <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink-3">
                     {feed.total}건
                   </span>
                 </div>
+                {activeMonth && activeIndustries.length === 0 ? (
+                  <p className="mt-1.5 text-[12.5px] text-ink-3">
+                    공포월 기준입니다. 시행일은 이보다 늦을 수 있습니다.
+                  </p>
+                ) : null}
 
                 <ul className="divide-y divide-rule">
                   {feed.items.map((item) => (

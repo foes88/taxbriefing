@@ -45,15 +45,20 @@ const config: Config = {
         },
       },
       fontSize: {
-        display: ['1.9375rem', { lineHeight: '1.28', letterSpacing: '-0.022em', fontWeight: '800' }],
-        headline: ['1.1875rem', { lineHeight: '1.42', letterSpacing: '-0.014em', fontWeight: '700' }],
-        record: ['1.0313rem', { lineHeight: '1.48', letterSpacing: '-0.011em', fontWeight: '700' }],
+        display: ['2.125rem', { lineHeight: '1.24', letterSpacing: '-0.025em', fontWeight: '800' }],
+        headline: ['1.25rem', { lineHeight: '1.4', letterSpacing: '-0.016em', fontWeight: '700' }],
+        /** 목록 제목. 훑을 때 가장 먼저 읽히는 크기다. */
+        record: ['1.0938rem', { lineHeight: '1.46', letterSpacing: '-0.013em', fontWeight: '700' }],
       },
       maxWidth: {
         /** 페이지 골격. 데스크톱에서 양옆이 비지 않을 만큼 넓다. */
         page: '78rem',
-        /** 본문 measure. 한국어는 이 폭을 넘으면 줄 끝에서 눈이 길을 잃는다. */
-        reading: '46rem',
+        /**
+         * 본문 measure. 한국어는 이 폭을 넘으면 줄 끝에서 눈이 길을 잃는다.
+         * 뉴스 탭은 사이드바가 없어 요약이 1200px 를 가로질렀다 — 한 줄에
+         * 120자가 넘었고, 그게 "가독성이 떨어진다"의 실체였다.
+         */
+        reading: '42rem',
       },
       borderRadius: {
         sharp: '2px',

@@ -20,7 +20,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
-from app.domain.industry import label
+from app.domain.industry import is_internal_document, label
 from app.models.tables import ContentVersion, TaxContent
 from app.services.ai.classify import build_search_text, classify_industries
 from app.services.ai.groq_provider import GroqProvider
@@ -41,16 +41,16 @@ def main(argv: list[str] | None = None) -> int:
 
     provider = GroqProvider()
     db = SessionLocal()
-    tagged = untagged = 0
+    tagged = untagged = failed = 0
 
     try:
         stmt = select(TaxContent).order_by(TaxContent.updated_at.desc())
         if not args.force:
-            # search_text 가 비었거나 업종이 비었으면 대상이다.
-            stmt = stmt.where(
-                (TaxContent.search_text.is_(None))
-                | (TaxContent.industries == [])
-            )
+            # **search_text 하나만 본다.** 이 값은 판단이 끝났을 때만 채워지므로
+            # "아직 안 함"의 정확한 표지다. 업종이 비었는지까지 같이 보면
+            # "판단해보니 무관"인 건들을 매번 다시 돌리게 되고, 그건 무료 한도를
+            # 그냥 태우는 일이다. 실제로 29건이 매 실행마다 다시 돌았다.
+            stmt = stmt.where(TaxContent.search_text.is_(None))
         if args.limit:
             stmt = stmt.limit(args.limit)
 
@@ -64,26 +64,48 @@ def main(argv: list[str] | None = None) -> int:
                 if version and isinstance(version.body, dict):
                     body = version.body
 
+            print(f"[{index}/{len(contents)}] {content.title[:44]}")
+
+            # 제목만 봐도 아는 것에 AI 호출을 쓰지 않는다. 무료 한도는
+            # 정작 판단이 필요한 개정에 써야 한다.
+            if is_internal_document(content.title):
+                content.search_text = build_search_text(
+                    content.title, content.one_line_summary, body
+                )
+                content.industries = []
+                untagged += 1
+                print("        (기관 내부 문서 — 규칙으로 판정, 화면에서 숨김)")
+                if not args.dry_run:
+                    db.commit()
+                continue
+
+            result = classify_industries(
+                content.title, content.one_line_summary, body, provider=provider
+            )
+
+            if result is None:
+                # 판단을 못 했다. **아무것도 쓰지 않고 넘어간다.**
+                # 여기서 search_text 만 채우면 "분류했는데 무관"으로 보이고,
+                # 화면은 그 판단을 믿고 이 건을 숨긴다. API 가 잠깐 죽은 것뿐인데.
+                failed += 1
+                print("        ! 분류 실패 — 다시 돌리면 이 건부터 이어집니다")
+                continue
+
             content.search_text = build_search_text(
                 content.title, content.one_line_summary, body
             )
+            content.industries = result.codes
 
-            codes, reason = classify_industries(
-                content.title, content.one_line_summary, body, provider=provider
-            )
-            content.industries = codes
-
-            if codes:
+            if result.codes:
                 tagged += 1
-                names = " · ".join(label(c) for c in codes)
+                names = " · ".join(label(c) for c in result.codes)
             else:
                 untagged += 1
-                names = "(해당 업종 없음)"
+                names = "(사업자와 무관 — 화면에서 숨김)"
 
-            print(f"[{index}/{len(contents)}] {content.title[:44]}")
             print(f"        {names}")
-            if reason:
-                print(f"        └ {reason[:80]}")
+            if result.reason:
+                print(f"        └ {result.reason[:80]}")
 
             # **건마다 커밋한다.** 맨 끝에 한 번만 커밋했더니 51건까지 처리하고
             # 죽었을 때 하나도 안 남았다. AI 호출이 섞인 긴 작업은 중간에 죽는다고
@@ -103,7 +125,9 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         db.close()
 
-    print(f"\n분류됨 {tagged}건 · 업종 없음 {untagged}건")
+    print(f"\n분류됨 {tagged}건 · 사업자 무관 {untagged}건 · 실패 {failed}건")
+    if failed:
+        print("실패한 건은 다시 실행하면 이어서 처리됩니다.")
     return 0
 
 

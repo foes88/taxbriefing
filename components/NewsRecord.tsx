@@ -44,7 +44,7 @@ export function NewsRecord({ item }: { item: NewsItem }) {
           </h3>
 
           {item.summary ? (
-            <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-ink-2">
+            <p className="mt-1.5 line-clamp-2 max-w-reading text-[15px] leading-relaxed text-ink-2">
               {item.summary}
             </p>
           ) : null}

@@ -164,12 +164,30 @@ def _summary(content: TaxContent) -> PublicContentSummary:
     )
 
 
+def _business_relevant(stmt):
+    """사업자와 무관하다고 **판단된** 건을 뺀다.
+
+    수집 대상에 국세청·재정경제부 행정규칙이 들어 있는데, 그중 상당수가
+    "고문변호사 운영규정", "기간제 근로자 인사관리규정", "국제기구 인턴 파견
+    규정" 같은 기관 내부 문서다. 사장님이 볼 화면에 이런 게 섞이면 진짜
+    개정이 묻힌다.
+
+    조건이 두 개인 이유: `industries = []` 하나만 보면 **아직 분류하지 않은**
+    건까지 숨는다. `search_text` 는 분류가 성공했을 때만 채워지므로,
+    둘을 같이 봐야 "판단해보니 무관"만 걸러진다. 분류 실패나 미분류는
+    그대로 보인다 — 판단을 못 한 것을 없는 것처럼 다루지 않는다.
+    """
+    return stmt.where(
+        ~(TaxContent.search_text.is_not(None) & (TaxContent.industries == []))
+    )
+
+
 def _public_query(tenant_id: UUID | None = None):
     """공개 콘텐츠만 고르는 기본 쿼리.
 
     tenant_id 가 NULL 인 콘텐츠는 전체 공용이다 (§7.4 D-04).
     """
-    stmt = select(TaxContent).where(TaxContent.workflow.in_(PUBLIC_STATES))
+    stmt = _business_relevant(select(TaxContent).where(TaxContent.workflow.in_(PUBLIC_STATES)))
     if tenant_id is None:
         return stmt.where(TaxContent.tenant_id.is_(None))
     return stmt.where(
@@ -198,22 +216,18 @@ def public_months(
 ) -> list[MonthBucket]:
     """월별 아카이브 (공포월 기준). 인증 없이 호출할 수 있다."""
     bucket = func.to_char(TaxContent.promulgation_date, "YYYY-MM")
-    stmt = (
+    stmt = _business_relevant(
         select(
             bucket.label("month"),
             func.count().label("count"),
             func.count()
             .filter(TaxContent.risk.in_([RiskLevel.HIGH, RiskLevel.CRITICAL]))
             .label("important"),
-        )
-        .where(
+        ).where(
             TaxContent.workflow.in_(PUBLIC_STATES),
             TaxContent.promulgation_date.is_not(None),
         )
-        .group_by(bucket)
-        .order_by(bucket.desc())
-        .limit(limit)
-    )
+    ).group_by(bucket).order_by(bucket.desc()).limit(limit)
     stmt = stmt.where(
         TaxContent.tenant_id.is_(None)
         if tenant_id is None

@@ -26,6 +26,15 @@ TEST_DB_URL = os.environ.get(
 )
 os.environ.setdefault("TAXBRIEFING_DATABASE_URL", TEST_DB_URL)
 
+# AI 제공자는 테스트에서 **항상 스텁이다.** setdefault 가 아니라 덮어쓴다.
+#
+# `.env` 에 실제 제공자를 넣어두면 AI 경로를 지나는 인수 테스트가 조용히
+# 네트워크를 타고, 무료 한도에 걸리는 날 테스트가 빨갛게 된다. 실제로 그랬다 —
+# 모델을 groq 로 바꾼 순간 AT-05 가 5분 걸려 실패했다.
+# 어떤 개발자의 .env 냐에 따라 결과가 갈리는 테스트는 테스트가 아니다.
+os.environ["TAXBRIEFING_AI_PROVIDER"] = "stub"
+os.environ["TAXBRIEFING_AI_MODEL"] = "stub-analysis-v1"
+
 
 def _database_available(url: str) -> bool:
     try:

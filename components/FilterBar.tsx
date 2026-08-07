@@ -33,6 +33,14 @@ export function FilterBar({ industries = [] }: { industries?: IndustryBucket[] }
   const to = params.get('to') ?? '';
   const [rangeOpen, setRangeOpen] = useState(Boolean(from || to));
 
+  // 접힌 영역에 걸려 있는 조건 수. 접어 두면 안 보이므로 숫자로 알린다.
+  const narrowCount =
+    params.getAll('risk_level').length +
+    params.getAll('legal_status').length +
+    (params.get('deadline') ? 1 : 0) +
+    (from || to ? 1 : 0);
+  const [moreOpen, setMoreOpen] = useState(narrowCount > 0);
+
   const push = useCallback(
     (next: URLSearchParams) => router.push(next.toString() ? `/?${next}` : '/'),
     [router],
@@ -132,45 +140,82 @@ export function FilterBar({ industries = [] }: { industries?: IndustryBucket[] }
         </div>
       ) : null}
 
-      <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Chip
-          label="마감 임박"
-          active={params.get('deadline') === '7'}
-          onClick={() => setFlag('deadline', '7')}
-        />
-        <Chip
-          label={from || to ? '기간 ✓' : '기간 지정'}
-          active={rangeOpen || Boolean(from || to)}
-          onClick={() => setRangeOpen((v) => !v)}
-        />
-        <Divider />
-        {RISK.map((o) => (
-          <Chip
-            key={o.value}
-            label={o.label}
-            active={on('risk_level', o.value)}
-            onClick={() => toggle('risk_level', o.value)}
-          />
-        ))}
-        <Divider />
-        {STATUS.map((o) => (
-          <Chip
-            key={o.value}
-            label={o.label}
-            active={on('legal_status', o.value)}
-            onClick={() => toggle('legal_status', o.value)}
-          />
-        ))}
+      {/*
+        중요도·상태·기간은 **접어 둔다.**
+        예전에는 업종 9개와 함께 열일곱 개가 늘 펼쳐져 있었고, 첫 항목이
+        나오기까지 조작 요소만 지나갔다. 자주 쓰는 축(검색·업종)만 남기고
+        나머지는 필요할 때 연다. 걸려 있는 조건 수는 접힌 채로도 보인다.
+      */}
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          className={`shrink-0 whitespace-nowrap rounded-sharp border px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${
+            narrowCount > 0
+              ? 'border-ink bg-ink text-surface'
+              : 'border-rule-strong bg-surface text-ink-2 hover:border-ink hover:text-ink'
+          }`}
+        >
+          <span aria-hidden className="mr-1 inline-block">
+            {moreOpen ? '−' : '+'}
+          </span>
+          좁혀 보기
+          {narrowCount > 0 ? <span className="tabular ml-1.5">{narrowCount}</span> : null}
+        </button>
+
         {dirty ? (
           <button
             type="button"
             onClick={() => router.push('/')}
-            className="ml-1 shrink-0 whitespace-nowrap px-1.5 text-[12px] font-semibold text-ink-3 underline underline-offset-4 hover:text-ink"
+            className="shrink-0 whitespace-nowrap px-1.5 text-[12px] font-semibold text-ink-3 underline underline-offset-4 hover:text-ink"
           >
-            초기화
+            전체 해제
           </button>
         ) : null}
       </div>
+
+      {moreOpen ? (
+        <div className="mt-2.5 flex flex-col gap-2.5 border-t border-rule pt-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="label shrink-0 pr-0.5">중요도</span>
+            {RISK.map((o) => (
+              <Chip
+                key={o.value}
+                label={o.label}
+                active={on('risk_level', o.value)}
+                onClick={() => toggle('risk_level', o.value)}
+              />
+            ))}
+            <Chip
+              label="마감 임박"
+              active={params.get('deadline') === '7'}
+              onClick={() => setFlag('deadline', '7')}
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="label shrink-0 pr-0.5">상태</span>
+            {STATUS.map((o) => (
+              <Chip
+                key={o.value}
+                label={o.label}
+                active={on('legal_status', o.value)}
+                onClick={() => toggle('legal_status', o.value)}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="label shrink-0 pr-0.5">기간</span>
+            <Chip
+              label={from || to ? `${from || '처음'} ~ ${to || '오늘'}` : '공포일로 좁히기'}
+              active={rangeOpen || Boolean(from || to)}
+              onClick={() => setRangeOpen((v) => !v)}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {rangeOpen ? (
         <form
@@ -216,10 +261,6 @@ export function FilterBar({ industries = [] }: { industries?: IndustryBucket[] }
       ) : null}
     </search>
   );
-}
-
-function Divider() {
-  return <span aria-hidden className="mx-1 h-3.5 w-px shrink-0 bg-rule-strong" />;
 }
 
 function Chip({

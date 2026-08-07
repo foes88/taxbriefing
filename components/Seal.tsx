@@ -85,19 +85,32 @@ const RISK_LABEL: Record<RiskLevel, string> = {
 };
 
 /**
- * 중요도. 목록에서 가장 먼저 읽혀야 하므로 색이 아니라 **굵기와 여백**으로 구분한다.
- * 긴급만 인주색을 쓴다 — 페이지 전체에서 이 색이 나오는 곳은 여기와 제호선뿐이다.
+ * 중요도.
+ *
+ * **제목과 같은 줄에 들어간다.** 신문이 [속보]를 헤드라인 안에 넣는 것과 같다 —
+ * 별도 줄에 두면 제목이 아래로 밀리고, 목록을 훑는 눈이 매번 배지를 지나
+ * 제목을 찾아야 한다.
+ *
+ * 긴급만 인주색을 쓴다. 페이지 전체에서 이 색이 나오는 곳은 여기와 제호선뿐이다.
+ * 안내·참고는 표시하지 않는다 — 대부분이 여기 해당해서 정보가 없고, 매 줄에
+ * 같은 글자가 붙으면 그 줄만큼 제목이 좁아진다.
  */
 export function RiskMark({ risk }: { risk: RiskLevel }) {
   if (risk === 'CRITICAL') {
-    return <span className="seal border-seal bg-seal text-white">{RISK_LABEL.CRITICAL}</span>;
+    return (
+      <span className="seal mr-1.5 border-seal bg-seal align-[2px] text-white">
+        {RISK_LABEL.CRITICAL}
+      </span>
+    );
   }
   if (risk === 'HIGH') {
-    return <span className="seal border-ink bg-ink text-surface">{RISK_LABEL.HIGH}</span>;
+    return (
+      <span className="seal mr-1.5 border-ink bg-ink align-[2px] text-surface">
+        {RISK_LABEL.HIGH}
+      </span>
+    );
   }
-  return (
-    <span className="text-[11px] font-semibold tracking-tight text-ink-3">{RISK_LABEL[risk]}</span>
-  );
+  return null;
 }
 
 /** 출처 등급 (§3.1). A/B 만 공식이고, 그 사실이 이 서비스의 신뢰 근거다. */

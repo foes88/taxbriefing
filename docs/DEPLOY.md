@@ -51,8 +51,15 @@ Vercel (웹)  ──HTTPS──▶  Render (API)  ──▶  Neon (PostgreSQL)
 | `TAXBRIEFING_CORS_ORIGINS` | `https://taxbriefing.vercel.app` |
 | `TAXBRIEFING_LAW_API_OC` | `taxbriefing` |
 | `TAXBRIEFING_SEED_ADMIN_PASSWORD` | 관리자 비밀번호 (기본값 금지) |
+| `TAXBRIEFING_AI_API_KEY` | GROQ 키 (`gsk_…`) |
+| `TAXBRIEFING_NAVER_CLIENT_ID` | 네이버 검색 API |
+| `TAXBRIEFING_NAVER_CLIENT_SECRET` | 네이버 검색 API |
+| `TAXBRIEFING_TELEGRAM_BOT_TOKEN` | 텔레그램 봇 |
+| `TAXBRIEFING_TELEGRAM_CHAT_ID` | 수신 채팅방 |
 
 `TAXBRIEFING_JWT_SECRET` 은 Render 가 자동 생성한다.
+AI·네이버·텔레그램 키는 **없어도 기동된다** — 해당 기능만 건너뛴다.
+로컬 `backend/.env` 에 있는 값을 그대로 옮기면 된다.
 
 4. 첫 배포에서 **`RUN_SEED` 를 `1`** 로 바꿔 출처·태그·관리자 계정을 만든다.
    배포가 끝나면 **다시 `0`** 으로 되돌린다.
@@ -73,6 +80,37 @@ curl https://taxbriefing-api.onrender.com/health
 
 ```
 https://taxbriefing.vercel.app,https://taxbriefing-git-main-foes88.vercel.app
+```
+
+---
+
+## 2-B. 로컬 데이터 옮기기
+
+로컬 DB 에 이미 수집·검수·게시된 콘텐츠가 쌓여 있다. `RUN_SEED` 로 만드는 것은
+출처·태그·관리자 계정뿐이므로, **콘텐츠는 따로 옮겨야 한다.**
+
+옮기지 않으면 사이트가 "아직 게시된 브리핑이 없습니다" 로 뜬다. 수집을 다시
+돌리면 원문은 채워지지만 **AI 요약과 업종 분류를 처음부터 다시 만들어야 하고**,
+같은 원문에 같은 답이 나온다는 보장이 없다 (모델·프롬프트 버전이 다르면 다르다).
+
+```bash
+# 1. 로컬 전체 덤프 (스키마 제외 — 마이그레이션이 이미 만들었다)
+docker exec taxbriefing-db pg_dump -U taxbriefing -d taxbriefing \
+  --data-only --disable-triggers > dump.sql
+
+# 2. Neon 으로 적재
+psql "postgresql://user:pw@ep-xxx.neon.tech/neondb?sslmode=require" < dump.sql
+```
+
+`psql` 이 없으면 Neon 대시보드의 **SQL Editor** 에 붙여넣어도 된다.
+
+> 순서가 중요하다. **Render 첫 배포(마이그레이션 실행)가 끝난 뒤** 적재한다.
+> 빈 DB 에 데이터부터 넣으면 테이블이 없어 실패한다.
+
+적재 후 확인:
+
+```sql
+SELECT count(*) FROM tax_contents WHERE workflow = 'PUBLISHED';
 ```
 
 ---

@@ -9,13 +9,13 @@ import Link from 'next/link';
 export function Masthead({ compact = false }: { compact?: boolean }) {
   return (
     <header className="border-b border-rule bg-surface">
-      <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3.5">
-        <Link href="/" className="flex items-baseline gap-2.5">
-          <span className="text-[17px] font-extrabold tracking-[-0.02em] text-ink">
+      <div className="mx-auto flex max-w-page items-center justify-between px-4 py-4">
+        <Link href="/" className="flex items-baseline gap-3">
+          <span className="text-[19px] font-extrabold tracking-[-0.03em] text-ink">
             TaxBriefing
           </span>
           {!compact ? (
-            <span className="hidden text-[12px] font-medium text-ink-3 sm:inline">
+            <span className="hidden border-l border-rule-strong pl-3 text-[12px] font-medium text-ink-3 sm:inline">
               공식 원문으로 확인한 세무 브리핑
             </span>
           ) : null}

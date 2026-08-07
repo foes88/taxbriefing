@@ -45,24 +45,28 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
       <SectionTabs active="news" />
 
       <main className="mx-auto max-w-page px-4 pb-20">
-        <section className="pb-2 pt-8">
-          <p className="gutter-date">{todayLabel()}</p>
-          <h1 className="mt-2 text-display text-ink">세무 관련 보도</h1>
-          <p className="mt-2.5 max-w-reading text-[15px] leading-relaxed text-ink-2">
-            언론에 나온 세무 관련 기사입니다. 제목과 링크만 모아둔 것이며, 내용을 확인하거나
-            검수하지 않았습니다.
+        <section className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-3 pt-8">
+          <div>
+            <p className="gutter-date">{todayLabel()}</p>
+            <h1 className="mt-1.5 text-display text-ink">세무 관련 보도</h1>
+          </div>
+          <p className="max-w-[24rem] text-[13.5px] leading-relaxed text-ink-3">
+            언론에 나온 기사 제목과 링크만 모았습니다. 내용을 확인하거나 검수하지 않았습니다.
           </p>
         </section>
 
         {/*
           경고 문구는 서버가 내려준 것을 그대로 쓴다. 화면에서 문구를 지우거나
           작게 바꾸는 일이 생기지 않도록, 문안의 정본을 API 에 둔다.
+
+          바탕을 깔지 않고 굵은 좌측 괘선만 쓴다. 회색 상자는 화면에서
+          "덜 중요한 안내"로 읽히는데, 이건 이 페이지에서 가장 중요한 문장이다.
         */}
-        <aside className="mt-4 border-l-2 border-state-pending bg-surface py-3 pl-4 pr-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.11em] text-state-pending">
+        <aside className="mt-1 border-l-[3px] border-state-pending py-1 pl-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.13em] text-state-pending">
             확인 전 정보
           </p>
-          <p className="mt-1 max-w-reading text-[13.5px] leading-relaxed text-ink-2">
+          <p className="mt-1.5 max-w-reading text-[14px] leading-relaxed text-ink-2">
             {feed?.caveat ??
               '아래는 언론 보도입니다. 공식 원문으로 확인되지 않았으며 확정된 제도 변경이 아닐 수 있습니다.'}{' '}
             확정된 내용은{' '}
@@ -110,9 +114,9 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
           </div>
         ) : feed && feed.items.length > 0 ? (
           <>
-            <div className="mt-4 flex items-baseline justify-between gap-3 border-b border-rule-strong pb-2">
-              <h2 className="text-[13px] font-bold tracking-tight text-ink">발행일 최신순</h2>
-              <span className="tabular shrink-0 text-[12px] font-semibold text-ink-3">
+            <div className="mt-5 flex items-center justify-between gap-3 border-b-2 border-ink pb-2">
+              <h2 className="section-mark">발행일 최신순</h2>
+              <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink-3">
                 {feed.total}건
               </span>
             </div>

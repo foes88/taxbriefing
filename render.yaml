@@ -40,6 +40,30 @@ services:
       - key: TAXBRIEFING_LAW_API_OC
         sync: false
 
+      # AI 요약·업종분류 (GROQ 무료 티어)
+      - key: TAXBRIEFING_AI_PROVIDER
+        value: groq
+      - key: TAXBRIEFING_AI_MODEL
+        value: openai/gpt-oss-120b
+      - key: TAXBRIEFING_AI_API_KEY
+        sync: false
+
+      # 네이버 검색 API (뉴스 탭). 없으면 뉴스 수집만 건너뛴다.
+      - key: TAXBRIEFING_NAVER_CLIENT_ID
+        sync: false
+      - key: TAXBRIEFING_NAVER_CLIENT_SECRET
+        sync: false
+
+      # 텔레그램 발송. 없으면 발송만 건너뛴다.
+      - key: TAXBRIEFING_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TAXBRIEFING_TELEGRAM_CHAT_ID
+        sync: false
+
+      # 브리핑 링크에 쓰는 사이트 주소.
+      - key: TAXBRIEFING_SITE_URL
+        value: https://taxbriefing.vercel.app
+
       # 기동 시 마이그레이션 실행. 인스턴스가 1개인 무료 티어에서만 안전하다.
       - key: RUN_MIGRATIONS
         value: "1"
