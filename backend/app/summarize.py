@@ -70,7 +70,19 @@ def _to_body(output: AnalysisOutput) -> dict[str, list[str]]:
 
 
 def _already_summarized(body: dict) -> bool:
-    return bool(body.get("changes")) and body.get("_ai") is True
+    """AI 를 이미 돌렸는가.
+
+    **`changes` 가 비었는지는 보지 않는다.** 빈 배열은 실패가 아니라 정상적인
+    결과다 — 프롬프트가 "실질 변경이 하나도 없으면 changes 를 빈 배열로 두라"고
+    시킨다. 자구 정리나 인용 조문 번호만 바뀐 개정이 여기 해당한다.
+
+    이전에는 `bool(body["changes"]) and body["_ai"]` 였다. 그래서 실질 변경이
+    없는 건이 영원히 "아직 요약 안 됨"으로 남아, 돌릴 때마다 다시 집혔고
+    한도만 태웠다. 한 배치에서 24건 중 22건이 그런 재처리였다.
+
+    판단 기준은 하나다 — 우리가 이 본문에 AI 를 돌렸는가.
+    """
+    return body.get("_ai") is True
 
 
 def run(

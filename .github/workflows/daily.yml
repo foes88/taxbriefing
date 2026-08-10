@@ -1,0 +1,111 @@
+name: 매일 브리핑
+
+# 수집 → 요약 → 업종분류 → 텔레그램 발송을 하루 한 번 돌린다.
+#
+# **Render 가 없어도 돈다.** 이 작업은 DB(Neon)에 직접 붙어 CLI 를 실행하므로
+# 웹 API 서버와 무관하다. Render 는 사이트를 보여주는 역할이고, 데이터를 채우는
+# 것은 여기다. 둘을 묶어 두면 한쪽이 죽을 때 다른 쪽도 멈춘다.
+#
+# 필요한 시크릿 (Settings → Secrets and variables → Actions)
+#   TAXBRIEFING_DATABASE_URL        필수. postgresql+psycopg://... (드라이버 접두어 포함)
+#   TAXBRIEFING_LAW_API_OC          없으면 법령 수집만 건너뛴다
+#   TAXBRIEFING_AI_API_KEY          없으면 요약·분류만 건너뛴다
+#   TAXBRIEFING_NAVER_CLIENT_ID     없으면 뉴스 수집만 건너뛴다
+#   TAXBRIEFING_NAVER_CLIENT_SECRET
+#   TAXBRIEFING_TELEGRAM_BOT_TOKEN  없으면 발송만 건너뛴다
+#   TAXBRIEFING_TELEGRAM_CHAT_ID
+#
+# 시크릿이 없으면 **실패가 아니라 건너뜀**이다. 아직 준비 안 된 단계 때문에
+# 매일 실패 메일이 오면 진짜 실패를 놓치게 된다.
+
+on:
+  schedule:
+    # 00:00 UTC = 09:00 KST. 사장님이 출근해서 확인하는 시각에 맞춘다.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: '최근 며칠 공포분을 수집할지'
+        default: '14'
+      send:
+        description: '텔레그램으로 실제 발송할지'
+        type: boolean
+        default: false
+
+env:
+  TAXBRIEFING_ENVIRONMENT: production
+  TAXBRIEFING_DATABASE_URL: ${{ secrets.TAXBRIEFING_DATABASE_URL }}
+  TAXBRIEFING_LAW_API_OC: ${{ secrets.TAXBRIEFING_LAW_API_OC }}
+  TAXBRIEFING_AI_PROVIDER: groq
+  TAXBRIEFING_AI_MODEL: openai/gpt-oss-120b
+  TAXBRIEFING_AI_API_KEY: ${{ secrets.TAXBRIEFING_AI_API_KEY }}
+  TAXBRIEFING_NAVER_CLIENT_ID: ${{ secrets.TAXBRIEFING_NAVER_CLIENT_ID }}
+  TAXBRIEFING_NAVER_CLIENT_SECRET: ${{ secrets.TAXBRIEFING_NAVER_CLIENT_SECRET }}
+  TAXBRIEFING_TELEGRAM_BOT_TOKEN: ${{ secrets.TAXBRIEFING_TELEGRAM_BOT_TOKEN }}
+  TAXBRIEFING_TELEGRAM_CHAT_ID: ${{ secrets.TAXBRIEFING_TELEGRAM_CHAT_ID }}
+  TAXBRIEFING_SITE_URL: https://taxbriefing.vercel.app
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    # 요약이 무료 한도에 걸리면 재시도하며 기다린다. 넉넉히 준다.
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 준비 상태 확인
+        id: ready
+        run: |
+          if [ -z "$TAXBRIEFING_DATABASE_URL" ]; then
+            echo "TAXBRIEFING_DATABASE_URL 시크릿이 없습니다. 등록 전까지 건너뜁니다."
+            echo "db=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=true" >> "$GITHUB_OUTPUT"
+          fi
+          [ -n "$TAXBRIEFING_AI_API_KEY" ] && echo "ai=true" >> "$GITHUB_OUTPUT" || echo "ai=false" >> "$GITHUB_OUTPUT"
+          [ -n "$TAXBRIEFING_TELEGRAM_BOT_TOKEN" ] && echo "tg=true" >> "$GITHUB_OUTPUT" || echo "tg=false" >> "$GITHUB_OUTPUT"
+
+      - name: 설치
+        if: steps.ready.outputs.db == 'true'
+        run: pip install ./backend
+
+      - name: 수집
+        if: steps.ready.outputs.db == 'true'
+        working-directory: backend
+        # 출처 하나가 죽어도 나머지는 돌아야 한다. 수집 실패로 요약까지 멈추지 않는다.
+        continue-on-error: true
+        run: python -m app.collect --days "${{ inputs.days || '14' }}" --limit 120
+
+      - name: 요약
+        if: steps.ready.outputs.db == 'true' && steps.ready.outputs.ai == 'true'
+        working-directory: backend
+        continue-on-error: true
+        # 무료 티어는 하루 20만 토큰이고 한 건에 4,500 쯤 든다. 40건이면 여유가 있다.
+        # 밀린 것이 있어도 며칠에 걸쳐 저절로 줄어든다 — 건별로 저장되기 때문이다.
+        run: python -m app.summarize --limit 40 --pace 12
+
+      - name: 업종 분류
+        if: steps.ready.outputs.db == 'true' && steps.ready.outputs.ai == 'true'
+        working-directory: backend
+        continue-on-error: true
+        run: python -m app.classify --limit 40 --pace 8
+
+      - name: 발송 미리보기
+        if: steps.ready.outputs.db == 'true'
+        working-directory: backend
+        run: python -m app.notify --hours 26
+
+      - name: 텔레그램 발송
+        # 예약 실행일 때만 실제로 보낸다. 수동 실행은 확인용이므로
+        # send 를 명시적으로 켜지 않는 한 보내지 않는다 — 발송은 되돌릴 수 없다.
+        if: |
+          steps.ready.outputs.db == 'true' && steps.ready.outputs.tg == 'true' &&
+          (github.event_name == 'schedule' || inputs.send)
+        working-directory: backend
+        run: python -m app.notify --hours 26 --send
