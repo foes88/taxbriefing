@@ -95,11 +95,25 @@ jobs:
           [ -n "$TAXBRIEFING_AI_API_KEY" ] && echo "ai=true" >> "$GITHUB_OUTPUT" || echo "ai=false" >> "$GITHUB_OUTPUT"
           [ -n "$TAXBRIEFING_TELEGRAM_BOT_TOKEN" ] && echo "tg=true" >> "$GITHUB_OUTPUT" || echo "tg=false" >> "$GITHUB_OUTPUT"
 
+      # 배치 작업에는 JWT 가 필요 없다. 토큰을 발급하지도 검증하지도 않는다.
+      #
+      # 그런데 설정은 production 환경에서 약한 JWT 시크릿을 거부하고, 그 검증이
+      # get_settings() 안에 있다. 모든 CLI 가 그걸 부르므로 **네 단계가 전부**
+      # ValueError 로 죽었다. continue-on-error 가 앞의 셋을 초록으로 보이게 해서
+      # 발송 단계 하나만 실패한 것처럼 읽혔다.
+      #
+      # 실행마다 새로 만든다. 이 값으로 발급된 토큰은 아무 데도 남지 않으므로
+      # 실행 간에 이어질 이유가 없고, 시크릿을 하나 더 등록하게 만들 이유도 없다.
+      - name: 배치용 JWT 시크릿 생성
+        if: steps.ready.outputs.db == 'true'
+        run: echo "TAXBRIEFING_JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: 설치
         if: steps.ready.outputs.db == 'true'
         run: pip install ./backend
 
       - name: 수집
+        id: collect
         if: steps.ready.outputs.db == 'true'
         working-directory: backend
         # 출처 하나가 죽어도 나머지는 돌아야 한다. 수집 실패로 요약까지 멈추지 않는다.
@@ -107,23 +121,54 @@ jobs:
         run: python -m app.collect --days "${{ inputs.days || '14' }}" --limit 120
 
       - name: 요약
+        id: summarize
         if: steps.ready.outputs.db == 'true' && steps.ready.outputs.ai == 'true'
         working-directory: backend
+        # AI 무료 한도에 걸리는 날이 있다. 그건 고장이 아니라 예정된 일이라
+        # 실패로 만들지 않는다. 밀린 것은 다음 날 이어서 처리된다.
         continue-on-error: true
-        # 무료 티어는 하루 20만 토큰이고 한 건에 4,500 쯤 든다. 40건이면 여유가 있다.
-        # 밀린 것이 있어도 며칠에 걸쳐 저절로 줄어든다 — 건별로 저장되기 때문이다.
+        # 하루 20만 토큰이고 한 건에 4,500 쯤 든다. 40건이면 여유가 있다.
         run: python -m app.summarize --limit 40 --pace 12
 
       - name: 업종 분류
+        id: classify
         if: steps.ready.outputs.db == 'true' && steps.ready.outputs.ai == 'true'
         working-directory: backend
         continue-on-error: true
         run: python -m app.classify --limit 40 --pace 8
 
       - name: 발송 미리보기
+        id: preview
         if: steps.ready.outputs.db == 'true'
         working-directory: backend
+        continue-on-error: true
         run: python -m app.notify --hours 26
+
+      # **continue-on-error 는 실패를 감춘다.**
+      # 지난 실행에서 네 단계가 전부 exit 1 이었는데 셋이 초록으로 보였고,
+      # 발송 하나만 실패한 것처럼 읽혔다. 원인을 찾는 데 그만큼 돌아갔다.
+      # 각 단계 결과를 요약에 적고, 전부 실패했으면 실행을 실패로 만든다 —
+      # 일부 실패는 정상 운영이지만 전부 실패는 고장이다.
+      - name: 결과 정리
+        if: steps.ready.outputs.db == 'true'
+        run: |
+          {
+            echo ""
+            echo "### 실행 결과"
+            echo ""
+            echo "| 단계 | 결과 |"
+            echo "| --- | --- |"
+            echo "| 수집 | ${{ steps.collect.outcome }} |"
+            echo "| 요약 | ${{ steps.summarize.outcome }} |"
+            echo "| 업종 분류 | ${{ steps.classify.outcome }} |"
+            echo "| 발송 미리보기 | ${{ steps.preview.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ steps.collect.outcome }}" != "success" ] \
+          && [ "${{ steps.preview.outcome }}" != "success" ]; then
+            echo "수집과 발송이 모두 실패했습니다. 설정이나 연결 문제입니다."
+            exit 1
+          fi
 
       - name: 텔레그램 발송
         # 예약 실행일 때만 실제로 보낸다. 수동 실행은 확인용이므로
