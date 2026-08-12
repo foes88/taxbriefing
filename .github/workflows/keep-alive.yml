@@ -1,33 +1,47 @@
-name: Keep API awake
+name: API 깨워두기
 
 # Render 무료 티어는 15분 무요청 시 절전한다. 깨어나는 데 30~60초가 걸리므로
 # 아침 첫 방문자가 그대로 기다리게 된다.
 #
-# 자동 실행은 **꺼져 있다.** 백엔드가 Render 에 올라간 뒤에 켠다.
-# 백엔드가 없는 상태로 10분마다 돌면 Actions 사용량만 쓰고 아무것도 하지 않는다.
+# **하루 종일 깨워두지 않는다.**
+# 무료 플랜은 월 750 인스턴스시간이고, 24시간 깨워두면 한 달에 약 730시간을
+# 혼자 다 쓴다. 서비스를 하나 더 붙이는 순간 한도를 넘는다.
 #
-# 켤 때는 아래 두 줄의 주석을 푼다.
-#   schedule:
-#     - cron: '*/10 * * * *'
+# 그래서 **한국 업무시간에만** 깨운다. 사장님도 세무 실무자도 그 시간에 본다.
+# 밤에는 자게 두고, 그 시간대 첫 방문자만 한 번 기다리면 된다.
 #
-# 참고: Render 는 절전 회피 목적의 자가 핑을 권장하지 않는다.
-# 실사용 단계에서는 유료 플랜으로 올리는 편이 안전하다.
+# 00:00~10:59 UTC = 09:00~19:59 KST
+#
+# 주소는 비밀이 아니므로 시크릿으로 두지 않는다. 시크릿으로 두면 값이 맞는지
+# 눈으로 확인할 수 없고, 지난번처럼 비어 있어도 알아채지 못한다.
+#
+# 참고: Render 는 절전 회피용 자가 핑을 권장하지 않는다. 실사용이 늘면
+# 유료 플랜으로 올리는 편이 정직하고 안전하다.
+
 on:
+  schedule:
+    - cron: '*/14 0-10 * * *'
   workflow_dispatch:
+
+env:
+  API_BASE_URL: https://taxbriefing-api.onrender.com
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping health endpoint
-        env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      - name: health 호출
         run: |
-          if [ -z "$API_BASE_URL" ]; then
-            echo "API_BASE_URL 시크릿이 없습니다. 건너뜁니다."
-            exit 0
-          fi
           # 절전에서 깨어나는 시간을 고려해 넉넉히 기다린다.
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$API_BASE_URL/health" || echo 000)
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 "$API_BASE_URL/health" || echo 000)
           echo "health -> $code"
+
+          # 한 번 실패했다고 빨간불을 켜지 않는다. 14분 뒤에 또 부른다.
+          # 매번 실패하면 그때는 진짜 문제이므로 재시도 후에도 안 되면 실패시킨다.
+          if [ "$code" != "200" ]; then
+            echo "재시도…"
+            sleep 30
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 "$API_BASE_URL/health" || echo 000)
+            echo "health -> $code"
+          fi
           [ "$code" = "200" ]
