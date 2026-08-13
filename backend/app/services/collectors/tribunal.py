@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -166,6 +167,28 @@ def build_body(detail: dict[str, Any]) -> str:
             continue
         parts.append(f"[{label}]\n{value}")
     return "\n\n".join(parts)
+
+
+#: `build_body` 가 붙인 구획 표시를 되읽는 정규식.
+_SECTION = re.compile(r"^\[([^\]\n]{1,20})\]\n", re.MULTILINE)
+
+
+def parse_sections(text: str) -> dict[str, str]:
+    """`build_body` 의 역함수. 저장된 원문을 다시 구획으로 가른다.
+
+    수집할 때 이미 갈라 놓은 것을 왜 다시 파싱하는가 — 화면이 쓸 구조화
+    본문은 수집이 아니라 초안 단계에서 만들고, 그때는 API 응답이 아니라
+    저장된 원문만 있기 때문이다. 원문을 정본으로 두고 필요할 때 다시
+    읽는 편이, 같은 내용을 두 군데 저장해 두고 어긋나기를 기다리는 것보다 낫다.
+    """
+    marks = list(_SECTION.finditer(text))
+    out: dict[str, str] = {}
+    for index, mark in enumerate(marks):
+        end = marks[index + 1].start() if index + 1 < len(marks) else len(text)
+        value = text[mark.end() : end].strip()
+        if value:
+            out[mark.group(1)] = value
+    return out
 
 
 class TaxTribunalCollector:

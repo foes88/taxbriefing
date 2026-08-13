@@ -74,6 +74,26 @@ export interface PublicSource {
   published_at: string | null;
 }
 
+/**
+ * 심판례 본문. 법령과 **구조가 다르다.**
+ *
+ * 법령은 "무엇이 바뀌고 무엇을 해야 하나"지만, 심판례는 "누가 무엇을
+ * 다퉜고 심판원이 어떻게 판단했나"다. 후자에 "지금 해야 할 일"을 붙이면
+ * 거짓이 된다 — 이미 끝난 남의 사건이다.
+ *
+ * 각 구획은 심판원이 쓴 원문 그대로다. 요약하지 않는다. 실무자는 이걸
+ * 근거로 인용하므로 우리가 다시 쓴 문장이 끼어들 자리가 없다.
+ */
+export interface TribunalBody {
+  tax_type: string;
+  /** 인용 · 일부인용 · 기각 · 각하 · 재조사. 못 읽었으면 빈 문자열. */
+  outcome: string;
+  case_no: string;
+  disposition_agency: string;
+  related_laws: string;
+  sections: { label: string; text: string }[];
+}
+
 export interface PublicContentDetail extends PublicContentSummary {
   announcement_date: string | null;
   promulgation_date: string | null;

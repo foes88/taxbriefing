@@ -43,6 +43,7 @@ from app.models.tables import (
     User,
 )
 from app.services import content as content_service
+from app.services.collectors.tribunal import parse_sections
 
 #: 신고·납부 의무에 직접 걸리는 법령은 틀렸을 때 사업자가 가산세를 문다.
 _HIGH_RISK_PATTERNS = (
@@ -101,8 +102,54 @@ def _extract_section(text: str, header: str) -> list[str]:
     return [line for line in lines if line][:4]
 
 
+#: 화면에 낼 심판례 구획과 순서. 사건 → 다툰 것 → 판단 → 결론.
+#: `관련 법령`·`참조 결정`은 옆 칸(서지)으로 보내므로 여기 없다.
+TRIBUNAL_SECTIONS: tuple[str, ...] = ("사건명", "청구인 주장", "판단 요지", "판단 이유", "주문")
+
+
+def _tribunal_body(version: RawContentVersion, meta: dict) -> dict:
+    """심판례 본문.
+
+    **법령 본문 틀을 그대로 쓰면 거짓이 된다.** 예전에는 종류를 안 보고
+    하나로 만들었고, 그래서 심판례 상세 화면에 이런 것들이 떴다.
+
+        달라지는 점        · 개정 되었습니다.
+        지금 해야 할 일    · 시행일 전에 해당 조문이 우리 사업장에
+                            적용되는지 확인하세요.
+
+    개정된 것이 없고 시행일도 없다. 심판례는 이미 끝난 한 건의 판단이다.
+
+    구조는 원문에서 그대로 옮긴다 — 요약하지 않는다. 심판원이 쓴 문장이
+    우리가 다시 쓴 문장보다 정확하고, 실무자는 그 원문을 근거로 인용한다.
+    """
+    sections = parse_sections(version.normalized_text)
+    return {
+        "tribunal": {
+            "tax_type": str(meta.get("tax_type") or ""),
+            "outcome": str(meta.get("result") or ""),
+            "case_no": str(meta.get("case_no") or ""),
+            "disposition_agency": str(meta.get("disposition_agency") or ""),
+            "related_laws": str(meta.get("related_laws") or ""),
+            "sections": [
+                {"label": name, "text": sections[name]}
+                for name in TRIBUNAL_SECTIONS
+                if sections.get(name)
+            ],
+        },
+        # 심판례에는 "사업자가 할 일"이 없다. 판단 사례를 참고할 뿐이다.
+        # 빈 배열로 두면 화면이 그 섹션을 통째로 그리지 않는다.
+        "needs_expert": [
+            "개별 사건의 사실관계에 대한 판단입니다. 사실관계가 다르면 결론도 "
+            "달라지므로, 우리 사업장에 그대로 적용된다고 볼 수 없습니다."
+        ],
+    }
+
+
 def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict:
     """화면에 보여줄 구조화 본문. 원문 필드와 원문 구획만 사용한다."""
+    if meta.get("content_kind") == "TRIBUNAL_DECISION":
+        return _tribunal_body(version, meta)
+
     reasons = _extract_section(version.normalized_text, "제개정이유")
     revisions = _extract_section(version.normalized_text, "개정문")
 
