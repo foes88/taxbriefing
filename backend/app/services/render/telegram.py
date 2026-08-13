@@ -42,6 +42,28 @@ STATUS_CAVEAT: dict[LegalStatus, str] = {
     LegalStatus.UNKNOWN: "확정 아님",
 }
 
+
+def caveat_for(status: LegalStatus, effective_date: dt.date | None) -> str | None:
+    """상태에 붙일 경고. 없으면 None.
+
+    **공포됐고 시행일도 아는 건에는 경고를 붙이지 않는다.**
+
+    "공포" 의 경고 문구는 원래 시행일이 안 적힌 경우를 위한 것이었다.
+    그런데 시행예정 법령을 수집하면서 시행일이 명확한 공포 건이 34건 들어왔고,
+    화면이 이렇게 됐다.
+
+        2027년 1월 1일 시행 예정
+        ▲ 시행일 확인
+
+    날짜를 보여주면서 그 날짜를 확인하라고 하는 셈이다. 경고가 이런 식으로
+    남발되면 정작 진짜 경고(입법예고는 최종안이 바뀔 수 있다)가 안 읽힌다.
+
+    다른 상태는 그대로다 — 입법예고·발의는 시행일을 알아도 확정이 아니다.
+    """
+    if status is LegalStatus.PROMULGATED and effective_date is not None:
+        return None
+    return STATUS_CAVEAT.get(status)
+
 RISK_PREFIX: dict[RiskLevel, str] = {
     RiskLevel.CRITICAL: "[긴급]",
     RiskLevel.HIGH: "[중요]",
@@ -92,7 +114,7 @@ def render_card(card: BriefingCard) -> str:
         lines.append(f"대상: {' · '.join(card.audience)}")
 
     status_line = f"상태: {STATUS_LABEL[card.legal_status]}"
-    caveat = STATUS_CAVEAT.get(card.legal_status)
+    caveat = caveat_for(card.legal_status, card.effective_date)
     if caveat:
         status_line += f" ({caveat})"
     lines.append(status_line)

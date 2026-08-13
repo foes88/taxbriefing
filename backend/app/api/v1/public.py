@@ -31,7 +31,7 @@ from app.models.tables import (
     Source,
     TaxContent,
 )
-from app.services.render.telegram import STATUS_CAVEAT, STATUS_LABEL
+from app.services.render.telegram import STATUS_LABEL, caveat_for
 
 router = APIRouter(prefix="/public", tags=["Public"])
 
@@ -170,7 +170,7 @@ def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSu
         one_line_summary=content.one_line_summary,
         legal_status=content.legal,
         status_label=STATUS_LABEL[content.legal],
-        status_caveat=STATUS_CAVEAT.get(content.legal),
+        status_caveat=caveat_for(content.legal, content.effective_date),
         is_confirmed=content.legal.is_confirmed,
         risk_level=content.risk,
         effective_date=content.effective_date,
