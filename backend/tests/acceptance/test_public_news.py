@@ -78,34 +78,48 @@ class TestPublicNews:
         assert body["total"] == 0
 
     def test_undated_items_are_excluded(self, client, db, make_source):
-        """날짜 없는 기사를 최신순 목록에 올리면 오래된 글을 오늘 소식으로 읽는다."""
+        """날짜 없는 기사를 최신순 목록에 올리면 오래된 글을 오늘 소식으로 읽는다.
+
+        제목에 세무 낱말을 넣는 이유 — 기본 목록은 세무 기사만 보여준다.
+        여기서 보려는 것은 날짜 규칙이지 주제 규칙이 아니므로, 주제
+        필터에 걸리지 않을 제목을 쓴다.
+        """
         source = make_source(AuthorityGrade.C)
-        self.add_news(db, source, title="날짜 있음", published_at=NOW)
-        self.add_news(db, source, title="날짜 없음", published_at=None)
+        self.add_news(db, source, title="부가세 신고 안내 — 날짜 있음", published_at=NOW)
+        self.add_news(db, source, title="부가세 신고 안내 — 날짜 없음", published_at=None)
 
         body = client.get("/api/v1/public/news").json()
 
-        assert [i["title"] for i in body["items"]] == ["날짜 있음"]
+        assert [i["title"] for i in body["items"]] == ["부가세 신고 안내 — 날짜 있음"]
 
     def test_days_window_filters(self, client, db, make_source):
         source = make_source(AuthorityGrade.D)
-        self.add_news(db, source, title="어제 기사", published_at=NOW - dt.timedelta(days=1))
-        self.add_news(db, source, title="작년 기사", published_at=NOW - dt.timedelta(days=300))
+        self.add_news(
+            db, source, title="어제 나온 종합소득세 기사", published_at=NOW - dt.timedelta(days=1)
+        )
+        self.add_news(
+            db,
+            source,
+            title="작년에 나온 종합소득세 기사",
+            published_at=NOW - dt.timedelta(days=300),
+        )
 
         recent = client.get("/api/v1/public/news?days=7").json()
         wide = client.get("/api/v1/public/news?days=365").json()
 
-        assert [i["title"] for i in recent["items"]] == ["어제 기사"]
+        assert [i["title"] for i in recent["items"]] == [
+            "어제 나온 종합소득세 기사"
+        ]
         assert wide["total"] == 2
 
     def test_sorted_newest_first(self, client, db, make_source):
         source = make_source(AuthorityGrade.D)
-        self.add_news(db, source, title="오래된", published_at=NOW - dt.timedelta(days=5))
-        self.add_news(db, source, title="최신", published_at=NOW - dt.timedelta(hours=1))
+        self.add_news(db, source, title="오래된 법인세 기사", published_at=NOW - dt.timedelta(days=5))
+        self.add_news(db, source, title="최신 법인세 기사", published_at=NOW - dt.timedelta(hours=1))
 
         body = client.get("/api/v1/public/news").json()
 
-        assert [i["title"] for i in body["items"]] == ["최신", "오래된"]
+        assert [i["title"] for i in body["items"]] == ["최신 법인세 기사", "오래된 법인세 기사"]
 
     def test_query_filters_by_title(self, client, db, make_source):
         source = make_source(AuthorityGrade.D)
@@ -129,3 +143,29 @@ class TestPublicNews:
         body = client.get("/api/v1/public/feed").json()
 
         assert all(i["title"] != "보도 기사" for i in body["items"])
+
+    def test_off_topic_news_is_hidden_by_default(self, client, db, make_source):
+        """세무 낱말이 없는 제목은 기본 목록에서 뺀다.
+
+        세무 전문지 RSS 라도 기업 홍보와 지역 행사가 섞여 들어온다.
+        112건 중 39건이 그랬다. 셋 중 하나가 "게임소통학교 성료" 면
+        며칠 만에 이 탭을 안 열게 된다.
+        """
+        source = make_source(AuthorityGrade.C)
+        self.add_news(db, source, title="국세청, 종합소득세 신고 안내")
+        self.add_news(db, source, title="ㅇㅇ은행, 창립기념일 맞아 적금 출시")
+
+        body = client.get("/api/v1/public/news").json()
+
+        assert [i["title"] for i in body["items"]] == ["국세청, 종합소득세 신고 안내"]
+        assert body["total"] == 1
+
+    def test_all_topics_shows_everything(self, client, db, make_source):
+        """거른다는 사실을 숨기지 않는다. 되돌릴 수 있어야 한다."""
+        source = make_source(AuthorityGrade.C)
+        self.add_news(db, source, title="국세청, 종합소득세 신고 안내")
+        self.add_news(db, source, title="ㅇㅇ은행, 창립기념일 맞아 적금 출시")
+
+        body = client.get("/api/v1/public/news?all_topics=true").json()
+
+        assert body["total"] == 2

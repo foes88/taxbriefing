@@ -140,9 +140,14 @@ export const publicApi = {
     }),
   industries: () =>
     request<IndustryBucket[]>('/public/industries', undefined, { cacheSeconds: 300 }),
-  news: (params: { q?: string; days?: number; limit?: number } = {}) => {
+  news: (
+    params: { q?: string; days?: number; all_topics?: boolean; limit?: number } = {},
+  ) => {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);
+    // 기본은 세무 기사만. 세무 전문지 RSS 라도 기업 홍보와 지역 행사가
+    // 섞여 들어온다 — 112건 중 39건이 그랬다.
+    if (params.all_topics) query.set('all_topics', 'true');
     query.set('days', String(params.days ?? 30));
     query.set('limit', String(params.limit ?? 40));
     return request<NewsFeed>(`/public/news?${query}`, undefined, {

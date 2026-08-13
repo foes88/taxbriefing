@@ -22,6 +22,7 @@ from app.api.deps import DbSession
 from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain import industry
 from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
+from app.domain.news_topic import LIKE_PATTERNS
 from app.models.tables import (
     ContentEvidence,
     ContentSource,
@@ -473,6 +474,9 @@ def public_news(
     db: DbSession,
     q: Annotated[str | None, Query(description="제목 키워드")] = None,
     days: Annotated[int, Query(ge=1, le=365, description="최근 N일")] = 30,
+    all_topics: Annotated[
+        bool, Query(description="세무 무관 기사도 포함. 기본은 세무 기사만")
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 40,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> NewsFeed:
@@ -496,6 +500,18 @@ def public_news(
             RawContent.published_at >= since,
         )
     )
+    if not all_topics:
+        # **세무 낱말이 하나도 없는 제목은 뺀다.**
+        #
+        # 세무 전문지 RSS 라도 기업 홍보와 지역 행사가 섞여 들어온다.
+        # 112건 중 39건(34%)이 그랬다. 셋 중 하나가 "게임소통학교 성료"
+        # 면 며칠 만에 이 탭을 안 열게 된다.
+        #
+        # 파이썬이 아니라 SQL 로 거른다. 불러온 다음에 거르면 "112건"
+        # 이라고 써 놓고 40건만 보여주게 된다.
+        stmt = stmt.where(
+            or_(*[RawContent.title.ilike(pattern) for pattern in LIKE_PATTERNS])
+        )
     if q:
         stmt = stmt.where(RawContent.title.ilike(f"%{q}%"))
 

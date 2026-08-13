@@ -38,22 +38,23 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   const params = await searchParams;
   const q = typeof params.q === 'string' ? params.q : undefined;
   const days = Number(params.days) || 30;
+  // 세무 낱말이 없는 기사도 볼 것인가. 기본은 세무 기사만.
+  const allTopics = params.all === '1';
   const show = Math.min(200, Math.max(PAGE_SIZE, Number(params.show) || PAGE_SIZE));
 
   let feed: NewsFeed | null = null;
   let error: string | null = null;
 
   try {
-    feed = await publicApi.news({ q, days, limit: show });
+    feed = await publicApi.news({ q, days, all_topics: allTopics, limit: show });
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
 
   const shown = feed?.items.length ?? 0;
   const remaining = Math.max(0, (feed?.total ?? 0) - shown);
-  const moreHref = `/news?days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}&show=${
-    show + PAGE_SIZE
-  }`;
+  const keep = `days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}${allTopics ? '&all=1' : ''}`;
+  const moreHref = `/news?${keep}&show=${show + PAGE_SIZE}`;
 
   const groups = groupByDate(feed?.items ?? [], (i) => i.published_at);
 
@@ -91,25 +92,35 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
           </p>
         </aside>
 
-        <form className="mt-6 flex flex-wrap items-center gap-2" action="/news">
-          <input
-            type="search"
-            name="q"
-            defaultValue={q ?? ''}
-            placeholder="기사 제목 검색"
-            className="h-10 min-w-0 flex-1 rounded-sharp border border-rule-strong bg-surface px-3.5 text-[14.5px] text-ink placeholder:text-ink-3 focus:border-ink focus:outline-none"
-          />
-          <input type="hidden" name="days" value={String(days)} />
-          <button type="submit" className="btn-primary h-10 shrink-0 py-0">
-            검색
-          </button>
+        {/*
+          검색 줄과 기간 줄을 나눈다. 한 줄에 다 밀어 넣었더니 휴대폰에서
+          입력창이 "기사 제목 검" 까지만 보였다 — 안내가 잘리면 안내가
+          아니라 고장으로 읽힌다.
+        */}
+        <div className="mt-6 flex flex-col gap-2.5">
+          <form className="flex items-center gap-2" action="/news">
+            <input
+              type="search"
+              name="q"
+              defaultValue={q ?? ''}
+              placeholder="기사 제목 검색"
+              className="h-10 min-w-0 flex-1 rounded-sharp border border-rule-strong bg-surface px-3.5 text-[14.5px] text-ink placeholder:text-ink-3 focus:border-ink focus:outline-none"
+            />
+            <input type="hidden" name="days" value={String(days)} />
+            {allTopics ? <input type="hidden" name="all" value="1" /> : null}
+            <button type="submit" className="btn-primary h-10 shrink-0 py-0">
+              검색
+            </button>
+          </form>
 
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="label pr-0.5">최근</span>
             {RANGES.map((range) => (
               <Link
                 key={range.days}
-                href={`/news?days=${range.days}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                href={`/news?days=${range.days}${q ? `&q=${encodeURIComponent(q)}` : ''}${
+                  allTopics ? '&all=1' : ''
+                }`}
                 className={`rounded-sharp border px-2.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
                   days === range.days
                     ? 'border-ink bg-ink text-surface'
@@ -119,8 +130,26 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
                 {range.label}
               </Link>
             ))}
+
+            {/*
+              걸러 내고 있다는 사실을 숨기지 않는다. 세무 전문지 RSS 라도
+              기업 홍보와 지역 행사가 섞여 들어와서 112건 중 39건이 그랬다.
+              다만 우리가 거른다는 것은 알려야 하고, 되돌릴 수 있어야 한다.
+            */}
+            <Link
+              href={`/news?days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}${
+                allTopics ? '' : '&all=1'
+              }`}
+              className={`ml-auto rounded-sharp border px-2.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
+                allTopics
+                  ? 'border-ink bg-ink text-surface'
+                  : 'border-rule-strong text-ink-3 hover:border-ink hover:text-ink'
+              }`}
+            >
+              {allTopics ? '세무 기사만' : '세무 무관 기사도'}
+            </Link>
           </div>
-        </form>
+        </div>
 
         {error ? (
           <div className="mt-7 border-l-[3px] border-seal bg-surface p-6">
