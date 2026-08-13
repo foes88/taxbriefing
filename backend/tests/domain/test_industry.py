@@ -42,8 +42,22 @@ class TestLabel:
 
 
 class TestTaxonomy:
-    def test_every_code_has_label_and_guide(self):
-        """설명이 없으면 모델이 경계를 못 긋는다. 이름이 없으면 화면에 코드가 뜬다."""
+    def test_every_code_has_a_label(self):
+        """이름이 없으면 화면에 코드가 그대로 뜬다."""
         for item in Industry:
             assert LABEL[item].strip()
+
+    def test_every_industry_has_a_guide(self):
+        """설명이 없으면 모델이 경계를 못 긋는다."""
+        for item in Industry:
+            if item is Industry.INTERNAL:
+                continue
             assert GUIDE[item].strip()
+
+    def test_internal_is_not_shown_to_the_model(self):
+        """INTERNAL 은 업종이 아니라 숨김 표시다.
+
+        GUIDE 에 넣으면 분류 프롬프트에 실려 나가고, 모델이 그걸 고를 수 있게
+        된다. 숨기는 결정은 눈으로 읽을 수 있는 규칙만 내려야 한다.
+        """
+        assert Industry.INTERNAL not in GUIDE

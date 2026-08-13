@@ -20,7 +20,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
-from app.domain.industry import is_internal_document, label
+from app.domain.industry import Industry, is_internal_document, label
 from app.models.tables import ContentVersion, TaxContent
 from app.services.ai.classify import build_search_text, classify_industries
 from app.services.ai.groq_provider import GroqProvider
@@ -72,7 +72,10 @@ def main(argv: list[str] | None = None) -> int:
                 content.search_text = build_search_text(
                     content.title, content.one_line_summary, body
                 )
-                content.industries = []
+                # 숨김 표시를 **명시적으로** 남긴다. 예전에는 빈 배열로 뒀는데,
+                # 모델이 업종을 못 붙인 것과 구분되지 않아 진짜 세법이 같이
+                # 숨겨졌다 (증권거래세율 인상이 화면에서 사라졌다).
+                content.industries = [Industry.INTERNAL.value]
                 untagged += 1
                 print("        (기관 내부 문서 — 규칙으로 판정, 화면에서 숨김)")
                 if not args.dry_run:
@@ -100,8 +103,9 @@ def main(argv: list[str] | None = None) -> int:
                 tagged += 1
                 names = " · ".join(label(c) for c in result.codes)
             else:
+                # 업종을 못 붙였다고 숨기지 않는다. 태그 없이 그대로 보인다.
                 untagged += 1
-                names = "(사업자와 무관 — 화면에서 숨김)"
+                names = "(업종 없음 — 화면에는 그대로 나옴)"
 
             print(f"        {names}")
             if result.reason:
@@ -125,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         db.close()
 
-    print(f"\n분류됨 {tagged}건 · 사업자 무관 {untagged}건 · 실패 {failed}건")
+    print(f"\n분류됨 {tagged}건 · 업종 없음 {untagged}건 · 실패 {failed}건")
     if failed:
         print("실패한 건은 다시 실행하면 이어서 처리됩니다.")
     return 0

@@ -165,20 +165,27 @@ def _summary(content: TaxContent) -> PublicContentSummary:
 
 
 def _business_relevant(stmt):
-    """사업자와 무관하다고 **판단된** 건을 뺀다.
+    """기관 내부 문서를 뺀다.
 
     수집 대상에 국세청·재정경제부 행정규칙이 들어 있는데, 그중 상당수가
-    "고문변호사 운영규정", "기간제 근로자 인사관리규정", "국제기구 인턴 파견
-    규정" 같은 기관 내부 문서다. 사장님이 볼 화면에 이런 게 섞이면 진짜
-    개정이 묻힌다.
+    "고문변호사 운영규정", "인사관리규정", "국제기구 인턴 파견 규정" 같은
+    기관 내부 문서다. 사장님이 볼 화면에 섞이면 진짜 개정이 묻힌다.
 
-    조건이 두 개인 이유: `industries = []` 하나만 보면 **아직 분류하지 않은**
-    건까지 숨는다. `search_text` 는 분류가 성공했을 때만 채워지므로,
-    둘을 같이 봐야 "판단해보니 무관"만 걸러진다. 분류 실패나 미분류는
-    그대로 보인다 — 판단을 못 한 것을 없는 것처럼 다루지 않는다.
+    **숨김은 규칙(is_internal_document)이 붙인 INTERNAL 표시로만 판단한다.**
+
+    전에는 "AI 가 업종을 하나도 못 붙였으면 숨긴다"였다. 그 결과 이런 것들이
+    화면에서 사라졌다.
+
+        증권거래세법 시행규칙 — 증권거래세 0→5/10,000 인상
+        부가가치세법 시행규칙 — 세금계산서 발급 대상 추가
+        국민연금법          — 노령연금 감액 기준 변경
+
+    세율 인상이 세무 브리핑에서 안 보이는 것보다 나쁜 결함은 없다.
+    모델의 일은 **태그를 다는 것**이지 콘텐츠를 지우는 것이 아니다.
+    업종을 못 붙였으면 태그 없이 보이면 된다.
     """
     return stmt.where(
-        ~(TaxContent.search_text.is_not(None) & (TaxContent.industries == []))
+        ~TaxContent.industries.contains([industry.Industry.INTERNAL.value])
     )
 
 
@@ -273,6 +280,8 @@ def public_industries(db: DbSession) -> list[IndustryBucket]:
         .where(
             TaxContent.workflow.in_(PUBLIC_STATES),
             TaxContent.tenant_id.is_(None),
+            # INTERNAL 은 업종이 아니라 숨김 표시다. 필터 버튼으로 나오면 안 된다.
+            unnested.c.value != industry.Industry.INTERNAL.value,
         )
         .group_by(unnested.c.value)
     )

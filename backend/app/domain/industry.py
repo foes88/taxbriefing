@@ -30,6 +30,10 @@ class Industry(StrEnum):
     분류가 잘게 쪼개질수록 경계 사례가 늘고, 경계 사례는 오분류가 된다.
     """
 
+    #: 기관 내부 문서. 업종이 아니라 **화면에서 숨긴다는 표시**다.
+    #: 규칙(is_internal_document)만 이 값을 붙인다 — 모델은 붙이지 못한다.
+    INTERNAL = "INTERNAL"
+
     ALL = "ALL"
     FOOD = "FOOD"
     EDU = "EDU"
@@ -47,6 +51,7 @@ class Industry(StrEnum):
 
 #: 화면·텔레그램에 나가는 이름.
 LABEL: dict[Industry, str] = {
+    Industry.INTERNAL: "기관 내부 문서",
     Industry.ALL: "전 업종 공통",
     Industry.FOOD: "요식·음식점",
     Industry.EDU: "학원·교육",
@@ -63,6 +68,7 @@ LABEL: dict[Industry, str] = {
 }
 
 #: 분류 모델에 주는 설명. 경계를 말로 못 그으면 모델도 못 긋는다.
+#: INTERNAL 은 여기 없다 — 모델에게 보여주지 않으므로 모델이 고를 수 없다.
 GUIDE: dict[Industry, str] = {
     Industry.ALL: (
         "업종을 가리지 않고 모든 사업자에게 적용. "
@@ -157,6 +163,9 @@ def normalize(values: object) -> list[str]:
 
     모델은 `"요식업"`, `"FOOD_SERVICE"`, `"음식점"` 처럼 제멋대로 쓴다.
     분류표에 없는 값은 **버린다.** 지어낸 업종을 화면에 띄우느니 없는 게 낫다.
+
+    INTERNAL 은 모델이 뭐라고 하든 받지 않는다. 그 값은 화면에서 숨긴다는
+    뜻이고, 숨기는 결정은 눈으로 읽을 수 있는 규칙만 내려야 한다.
     """
     if not isinstance(values, list):
         return []
@@ -166,6 +175,8 @@ def normalize(values: object) -> list[str]:
         try:
             item = Industry(str(raw).strip().upper())
         except ValueError:
+            continue
+        if item is Industry.INTERNAL:
             continue
         if item.value not in out:
             out.append(item.value)
