@@ -50,6 +50,13 @@ export interface PublicContentSummary {
   /** 화면용 업종 이름. 서버가 만든다 — 프론트에 분류표를 복사해두지 않는다. */
   industry_labels: string[];
   /**
+   * POLICY / TRIBUNAL / INTERPRETATION / BILL / SUPPORT.
+   *
+   * 심판례에는 시행일도 정책 상태도 없다. 화면이 그 배지를 붙일지 말지를
+   * 이 값으로 정한다. 없으면 POLICY 로 본다.
+   */
+  content_kind?: string;
+  /**
    * 달라지는 것이나 할 일이 하나라도 있는가. "먼저 볼 것" 선정에 쓴다.
    *
    * 선택 필드다 — 이 값을 내려주지 않는 예전 API 와도 동작해야 한다.

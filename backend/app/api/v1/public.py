@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession
 from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain import industry
-from app.domain.enums import LegalStatus, RiskLevel, WorkflowStatus
+from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
 from app.models.tables import (
     ContentEvidence,
     ContentSource,
@@ -75,6 +75,9 @@ class PublicContentSummary(BaseModel):
     #: 업종 코드와 화면용 이름. 상담 참고용 색인이지 적용 판정이 아니다.
     industries: list[str] = Field(default_factory=list)
     industry_labels: list[str] = Field(default_factory=list)
+    #: 법령인가 심판례인가 (POLICY / TRIBUNAL / INTERPRETATION / BILL / SUPPORT).
+    #: 화면이 시행일·상태 배지를 붙일지 말지 이 값으로 정한다.
+    content_kind: str = "POLICY"
     #: 달라지는 것이나 할 일이 하나라도 있는가.
     #:
     #: "먼저 볼 것"에 올릴지 판단하는 데 쓴다. 실질 변경이 없는 개정도
@@ -180,6 +183,7 @@ def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSu
         updated_at=content.updated_at,
         industries=list(content.industries or []),
         industry_labels=[industry.label(code) for code in (content.industries or [])],
+        content_kind=content.content_kind,
         actionable=actionable,
     )
 
@@ -324,6 +328,9 @@ def public_feed(
     legal_status: Annotated[list[LegalStatus] | None, Query()] = None,
     risk_level: Annotated[list[RiskLevel] | None, Query()] = None,
     industries: Annotated[list[str] | None, Query(description="업종 코드")] = None,
+    content_kind: Annotated[
+        list[str] | None, Query(description="POLICY / TRIBUNAL / INTERPRETATION / BILL / SUPPORT")
+    ] = None,
     month: Annotated[str | None, Query(description="공포월 YYYY-MM")] = None,
     promulgated_from: Annotated[dt.date | None, Query(description="공포일 시작")] = None,
     promulgated_to: Annotated[dt.date | None, Query(description="공포일 종료")] = None,
@@ -370,6 +377,12 @@ def public_feed(
         stmt = stmt.where(
             or_(*[TaxContent.industries.contains([code]) for code in industries])
         )
+    if content_kind:
+        stmt = stmt.where(TaxContent.content_kind.in_(content_kind))
+    else:
+        # **기본은 법령만.** 심판례와 법령을 한 목록에 섞으면 "제도가 바뀌었다"와
+        # "이런 사례가 있었다"가 구분되지 않는다. 심판례는 /tips 가 따로 보여준다.
+        stmt = stmt.where(TaxContent.content_kind == ContentKind.POLICY.value)
     if legal_status:
         stmt = stmt.where(TaxContent.legal.in_(legal_status))
     if risk_level:

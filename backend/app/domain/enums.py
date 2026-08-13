@@ -49,6 +49,30 @@ class LegalStatus(StrEnum):
         return self is LegalStatus.EFFECTIVE
 
 
+class ContentKind(StrEnum):
+    """콘텐츠 종류.
+
+    같은 화면에 섞이지만 **성격이 다른 것들**이다. 종류를 모르면 화면이
+    심판례에도 시행일과 상태 배지를 붙이려 하고, 요약은 "개정되어 시행됩니다"
+    라고 쓴다. 둘 다 거짓이다.
+    """
+
+    POLICY = "POLICY"
+    """법령·행정규칙. 시행일과 정책 상태를 갖는다."""
+
+    TRIBUNAL = "TRIBUNAL"
+    """조세심판원 심판례. 제도가 아니라 **판단 사례**다 — 시행일이 없다."""
+
+    INTERPRETATION = "INTERPRETATION"
+    """국세청·재정경제부 법령해석. 심판례와 같은 성격이다."""
+
+    BILL = "BILL"
+    """국회 법률안. 아직 법이 아니다 — 통과 여부가 불확실하다."""
+
+    SUPPORT = "SUPPORT"
+    """지원사업·정책자금. 마감일을 갖고, 시행일은 없다."""
+
+
 class WorkflowStatus(StrEnum):
     """콘텐츠 내부 처리 상태 (§3.3). legal_status 와 절대 합치지 않는다."""
 

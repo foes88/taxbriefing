@@ -15,7 +15,7 @@ export function Masthead({
   active,
   compact = false,
 }: {
-  active?: 'policy' | 'news';
+  active?: 'policy' | 'tips' | 'news';
   compact?: boolean;
 }) {
   return (
@@ -42,6 +42,7 @@ export function Masthead({
         <nav aria-label="구분" className="mx-auto max-w-page px-4">
           <div className="flex gap-1">
             <Tab href="/" label="정책·법령" note="검수 완료" current={active === 'policy'} />
+            <Tab href="/tips" label="실무 TIP" note="심판례" current={active === 'tips'} />
             <Tab href="/news" label="뉴스" note="확인 전" current={active === 'news'} unverified />
           </div>
         </nav>

@@ -149,6 +149,40 @@ class TestHiddenContent:
 
         assert item["actionable"] is True
 
+    def test_tribunal_does_not_leak_into_the_policy_feed(
+        self, client, db, make_source, make_raw_version
+    ):
+        """심판례와 법령을 한 목록에 섞으면 안 된다.
+
+        "제도가 바뀌었다" 와 "이런 사례가 있었다" 가 구분되지 않는다.
+        """
+        policy = self.publish(
+            db, make_source, make_raw_version, title="소득세법 (일부개정)", industries=["ALL"]
+        )
+        tribunal = self.publish(
+            db, make_source, make_raw_version, title="가공세금계산서 사건 — 기각", industries=[]
+        )
+        tribunal.content_kind = "TRIBUNAL"
+        db.flush()
+
+        titles = [i["title"] for i in client.get("/api/v1/public/feed").json()["items"]]
+
+        assert titles == [policy.title]
+
+    def test_tribunal_is_reachable_when_asked_for(
+        self, client, db, make_source, make_raw_version
+    ):
+        content = self.publish(
+            db, make_source, make_raw_version, title="가공세금계산서 사건 — 기각", industries=[]
+        )
+        content.content_kind = "TRIBUNAL"
+        db.flush()
+
+        body = client.get("/api/v1/public/feed?content_kind=TRIBUNAL").json()
+
+        assert [i["title"] for i in body["items"]] == [content.title]
+        assert body["items"][0]["content_kind"] == "TRIBUNAL"
+
     def test_model_cannot_hide_content(self):
         """모델이 INTERNAL 을 말해도 받지 않는다.
 

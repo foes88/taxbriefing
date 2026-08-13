@@ -28,6 +28,7 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.domain.enums import (
     AuthorityGrade,
+    ContentKind,
     LegalStatus,
     ReviewDecision,
     RiskLevel,
@@ -151,6 +152,21 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
     return f"「{name}」이(가) {revision}되어 {when}."[:250]
 
 
+def _decide_kind(meta: dict) -> str:
+    """수집기가 남긴 표시를 콘텐츠 종류로 옮긴다.
+
+    수집 단계에서만 알 수 있는 사실이다 — 본문만 보고는 심판례인지
+    법령인지 구분하기 어렵다.
+    """
+    mapping = {
+        "TRIBUNAL_DECISION": ContentKind.TRIBUNAL,
+        "INTERPRETATION": ContentKind.INTERPRETATION,
+        "BILL": ContentKind.BILL,
+        "SUPPORT": ContentKind.SUPPORT,
+    }
+    return mapping.get(str(meta.get("content_kind") or ""), ContentKind.POLICY).value
+
+
 def _tribunal_summary(meta: dict) -> str:
     """심판례 임시 문구. 결론과 세목만 말하고 나머지는 본문에 맡긴다."""
     outcome = str(meta.get("result") or "").strip()
@@ -239,6 +255,7 @@ def run(
                 roles={version.id: SourceRole.PRIMARY},
                 now=dt.datetime.now(dt.UTC),
             )
+            content.content_kind = _decide_kind(meta)
             content.one_line_summary = _summary(raw, meta, effective)
             content.promulgation_date = promulgated
             content.effective_date = effective

@@ -279,6 +279,9 @@ class TaxContent(Base):
     risk: Mapped[enums.RiskLevel] = mapped_column(
         RiskLevelType, nullable=False, default=enums.RiskLevel.MEDIUM
     )
+    #: 법령인가 심판례인가 (app.domain.enums.ContentKind).
+    #: 종류를 모르면 화면이 심판례에도 시행일·상태 배지를 붙이려 한다.
+    content_kind: Mapped[str] = mapped_column(Text, nullable=False, default="POLICY")
     title: Mapped[str] = mapped_column(Text, nullable=False)
     one_line_summary: Mapped[str | None] = mapped_column(Text)
     announcement_date: Mapped[dt.date | None] = mapped_column(Date)
