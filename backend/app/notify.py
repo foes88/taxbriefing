@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
-from app.domain.enums import WorkflowStatus
+from app.domain.enums import ContentKind, WorkflowStatus
 from app.domain.industry import Industry
 from app.models.tables import ContentVersion, TaxContent
 from app.services.delivery.channels import OutboundMessage, TelegramAdapter, split_for_telegram
@@ -63,6 +63,12 @@ def collect_cards(
     다음부터 알림 자체를 안 읽게 된다.
 
     화면에는 그대로 남는다 — 찾아보러 온 사람에게는 "바뀐 게 없다"도 답이다.
+
+    **국회 법안은 카드로 보내지 않는다.**
+    법안 40건을 수집한 날 아침 브리핑 여섯 자리가 전부 법안으로 찼다.
+    "누가 무엇을 발의했다" 가 여섯 줄이고, 정작 이미 시행 중인 개정은
+    한 건도 안 보였다. 확정된 것이 먼저다 — 법안은 아직 법이 아니고
+    지금 할 일이 없다. 몇 건 있는지만 맨 끝에 한 줄로 알린다.
     """
     rows = db.execute(
         select(TaxContent)
@@ -78,6 +84,9 @@ def collect_cards(
         .order_by(TaxContent.risk.desc(), TaxContent.updated_at.desc())
     ).scalars().all()
 
+    bill_count = sum(1 for c in rows if c.content_kind == ContentKind.BILL.value)
+    rows = [c for c in rows if c.content_kind != ContentKind.BILL.value]
+
     cards: list[BriefingCard] = []
 
     for content in rows:
@@ -86,6 +95,21 @@ def collect_cards(
             version = db.get(ContentVersion, content.current_version_id)
             if version and isinstance(version.body, dict):
                 body = version.body
+
+        # **아직 요약되지 않은 건은 보내지 않는다.**
+        #
+        # 임시 문구도 changes 에 들어 있어서 통과했고, 아침 브리핑
+        # 여섯 자리 중 셋이 이렇게 찼다.
+        #
+        #     핵심 내용
+        #     · 일부개정 되었습니다.
+        #     · [일부개정]
+        #
+        # 아무것도 알려주지 않으면서 자리는 다 먹는다. 화면에는 그대로
+        # 남는다 — 찾아보러 온 사람에게는 목록에 있는 것 자체가 정보다.
+        # 요약은 매일 채워지므로 며칠 안에 알림에도 올라온다.
+        if body.get("_ai") is not True:
+            continue
 
         changes = _string_list(body, "changes")
         actions = _string_list(body, "required_actions")
@@ -105,13 +129,18 @@ def collect_cards(
                 deadline=content.application_end,
                 detail_url=f"{site_base.rstrip('/')}/contents/{content.id}",
                 corrected=content.workflow is WorkflowStatus.CORRECTED,
+                # 종류를 넘긴다. 렌더러가 이걸 보고 말을 바꾼다 —
+                # 법안에 "시행일" 과 "사업자가 할 일" 을 붙이면 통과한
+                # 것처럼 읽힌다.
+                kind=content.content_kind,
+                proposed_at=content.announcement_date,
             )
         )
 
     # 자리가 모자라 빠진 것만 센다. 내용이 없어 걸러진 것은 "더 볼 게 있다"가
     # 아니므로 안내에 넣지 않는다.
     overflow = max(0, len(cards) - limit)
-    return cards[:limit], overflow
+    return cards[:limit], overflow, bill_count
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,14 +167,16 @@ def main(argv: list[str] | None = None) -> int:
 
     db = SessionLocal()
     try:
-        cards, overflow = collect_cards(
+        cards, overflow, bills = collect_cards(
             db, since=since, site_base=args.site, limit=args.limit
         )
     finally:
         db.close()
 
     today = now.astimezone(dt.timezone(dt.timedelta(hours=9))).date()
-    text = render_digest(cards, today=today, site_url=args.site, overflow=overflow)
+    text = render_digest(
+        cards, today=today, site_url=args.site, overflow=overflow, bills=bills
+    )
     chunks = split_for_telegram(text)
 
     print("=" * 60)

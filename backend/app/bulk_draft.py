@@ -85,7 +85,15 @@ def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today
     return LegalStatus.UNKNOWN
 
 
-def _decide_risk(title: str) -> RiskLevel:
+def _decide_risk(title: str, *, kind: str | None = None) -> RiskLevel:
+    """중요도는 **지금 손봐야 하는 정도**다.
+
+    법안은 아무리 큰 세법이라도 [중요] 를 달지 않는다. 통과할지 모르는
+    것에 할 일이 없고, 확정된 개정과 같은 표시를 달면 둘이 구분되지 않는다.
+    실제로 아침 브리핑 6건이 전부 [중요] 법안으로 채워진 적이 있다.
+    """
+    if kind == ContentKind.BILL.value:
+        return RiskLevel.LOW
     if any(p in title for p in _HIGH_RISK_PATTERNS):
         return RiskLevel.HIGH
     if any(p in title for p in _MEDIUM_RISK_PATTERNS):
@@ -145,10 +153,52 @@ def _tribunal_body(version: RawContentVersion, meta: dict) -> dict:
     }
 
 
+def _bill_body(meta: dict) -> dict:
+    """법안 본문.
+
+    **법령 틀을 쓰면 거짓이 된다.** 텔레그램에 이렇게 나갔다.
+
+        [중요] 소득세법 일부개정법률안 — 박수영의원 등 11인
+        상태: 상태 확인 필요 (확정 아님)
+        시행일: 확인 필요
+        · 「…법률안」이(가) 개정되어 시행일은 원문 확인이 필요합니다.
+        · 시행일 전에 해당 조문이 우리 사업장에 적용되는지 확인하세요.
+
+    세 줄 다 틀렸다. 개정된 것이 없고(발의만 됐다), 시행일이 없고
+    (통과할지 모른다), 상태를 모르는 것도 아니다(발의됨).
+
+    법안은 **아직 법이 아니다.** 사업자가 지금 할 일은 없다. 대신
+    "이런 게 논의되고 있다" 를 알려 주는 것이 이 항목의 값이다.
+    """
+    proposer = str(meta.get("proposer") or "").strip()
+    committee = str(meta.get("committee") or "").strip()
+    result = str(meta.get("proc_result") or "").strip()
+
+    changes: list[str] = []
+    if proposer:
+        changes.append(f"발의: {proposer}")
+    if committee:
+        changes.append(f"소관: {committee}")
+    changes.append(f"처리 결과: {result or '아직 심사 중'}")
+
+    return {
+        "changes": changes,
+        # **할 일을 만들지 않는다.** 통과할지 모르는 법안에 조치를 시키면
+        # 사업자가 안 해도 될 일을 하고, 정작 확정된 개정과 구분이 안 된다.
+        "required_actions": [],
+        "needs_expert": [
+            "국회에 발의된 법안입니다. 통과 여부와 최종 내용은 심사 과정에서 "
+            "달라질 수 있으므로, 지금 확정된 제도로 보고 준비하시면 안 됩니다."
+        ],
+    }
+
+
 def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict:
     """화면에 보여줄 구조화 본문. 원문 필드와 원문 구획만 사용한다."""
     if meta.get("content_kind") == "TRIBUNAL_DECISION":
         return _tribunal_body(version, meta)
+    if meta.get("content_kind") == "BILL":
+        return _bill_body(meta)
 
     reasons = _extract_section(version.normalized_text, "제개정이유")
     revisions = _extract_section(version.normalized_text, "개정문")
@@ -189,6 +239,8 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
     """
     if meta.get("content_kind") == "TRIBUNAL_DECISION":
         return _tribunal_summary(meta)
+    if meta.get("content_kind") == "BILL":
+        return _bill_summary(meta)
 
     name = raw.title
     revision = meta.get("revision_type") or "개정"
@@ -197,6 +249,28 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
     else:
         when = "시행일은 원문 확인이 필요합니다"
     return f"「{name}」이(가) {revision}되어 {when}."[:250]
+
+
+def _bill_summary(meta: dict) -> str:
+    """법안 임시 문구. **확정 어투를 쓰지 않는다.**
+
+    "바뀝니다" 가 아니라 "발의됐습니다" 다. 아직 법이 아니다.
+    """
+    proposer = str(meta.get("proposer") or "").strip()
+    committee = str(meta.get("committee") or "").strip()
+    proposed = _parse_iso(meta.get("proposed_at"))
+
+    parts = ["국회 발의 법안"]
+    if proposer:
+        parts.append(proposer)
+    if proposed:
+        parts.append(f"{proposed.year}년 {proposed.month}월 {proposed.day}일 발의")
+    head = " · ".join(parts)
+
+    tail = f" {committee} 심사 중이며 통과 여부는 정해지지 않았습니다." if committee else (
+        " 국회 심사 중이며 통과 여부는 정해지지 않았습니다."
+    )
+    return (head + "." + tail)[:250]
 
 
 def _decide_kind(meta: dict) -> str:
@@ -320,7 +394,7 @@ def run(
                 title=raw.title[:120],
                 source_version_ids=[version.id],
                 legal_status=_decide_status(promulgated, effective, today),
-                risk_level=_decide_risk(raw.title),
+                risk_level=_decide_risk(raw.title, kind=_decide_kind(meta)),
                 body=_build_body(raw, version, meta),
                 roles={version.id: SourceRole.PRIMARY},
                 now=dt.datetime.now(dt.UTC),
@@ -334,6 +408,22 @@ def run(
             content.promulgation_date = promulgated
             content.effective_date = effective
             content.announcement_date = promulgated
+
+            # **법안은 수집기가 이미 판정한 값을 쓴다.**
+            #
+            # 법령 필드(공포일·시행일)로 상태를 정하면 법안은 둘 다 없어서
+            # 늘 UNKNOWN 이 되고, 화면과 텔레그램에 "상태 확인 필요
+            # (확정 아님)" 이 붙었다. 확인이 필요한 게 아니라 발의된 것이다.
+            #
+            # 국회 API 의 PROC_RESULT 를 수집기가 읽어 BILL_PROPOSED /
+            # ASSEMBLY_PASSED 로 갈라 두었는데 그걸 버리고 있었다.
+            if content.content_kind == ContentKind.BILL.value:
+                status = str(meta.get("legal_status") or "").strip()
+                if status in LegalStatus.__members__:
+                    content.legal = LegalStatus[status]
+                # 발의일이 이 법안의 유일한 날짜다. 시행일 자리는 비워 둔다 —
+                # 통과해야 생기는 값이라 지금 채우면 거짓이다.
+                content.announcement_date = _parse_iso(meta.get("proposed_at"))
 
             # 근거는 이 원문 버전 자체다 — 날짜가 API 필드에서 왔기 때문이다.
             for field in (

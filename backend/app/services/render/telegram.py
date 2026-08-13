@@ -92,6 +92,22 @@ class BriefingCard:
 
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
+    kind: str = "POLICY"
+    """법령인가 법안인가 심판례인가.
+
+    **종류에 따라 쓸 수 있는 말이 다르다.** 법안에 "시행일" 을 적으면
+    통과한 것처럼 읽힌다. 실제로 이렇게 나갔다.
+
+        [중요] 소득세법 일부개정법률안 — 박수영의원 등 11인
+        상태: 상태 확인 필요 (확정 아님)
+        시행일: 확인 필요
+
+    발의된 법안에 시행일이 있을 리 없고, 상태를 모르는 것도 아니다.
+    """
+
+    proposed_at: dt.date | None = None
+    """법안 발의일. 법안에는 이 날짜 하나뿐이다."""
+
 
 def _fmt_date(value: dt.date | None, *, missing: str) -> str:
     if value is None:
@@ -119,8 +135,15 @@ def render_card(card: BriefingCard) -> str:
         status_line += f" ({caveat})"
     lines.append(status_line)
 
-    # 시행일이 없으면 임의 날짜를 쓰지 않고 '확인 필요'로 표시한다 (§10.4).
-    lines.append(f"시행일: {_fmt_date(card.effective_date, missing='확인 필요')}")
+    # **법안에는 시행일 줄을 두지 않는다.**
+    # 통과해야 생기는 값이라 "확인 필요" 라고 적으면 어딘가에 있는데
+    # 우리가 못 찾은 것처럼 읽힌다. 없는 것이 맞다.
+    if card.kind == "BILL":
+        if card.proposed_at is not None:
+            lines.append(f"발의일: {_fmt_date(card.proposed_at, missing='-')}")
+    else:
+        # 시행일이 없으면 임의 날짜를 쓰지 않고 '확인 필요'로 표시한다 (§10.4).
+        lines.append(f"시행일: {_fmt_date(card.effective_date, missing='확인 필요')}")
 
     if card.deadline is not None:
         lines.append(f"마감일: {_fmt_date(card.deadline, missing='-')}")
@@ -132,7 +155,9 @@ def render_card(card: BriefingCard) -> str:
 
     if card.actions:
         lines.append("")
-        lines.append("사업자가 할 일")
+        # 법안에는 "할 일" 이 없다. 통과할지 모르는 것에 조치를 시키면
+        # 사업자가 안 해도 될 일을 하고, 확정된 개정과 구분이 안 된다.
+        lines.append("참고" if card.kind == "BILL" else "사업자가 할 일")
         lines.extend(f"· {action}" for action in card.actions)
 
     if card.warnings:
@@ -155,6 +180,7 @@ def render_digest(
     site_url: str | None = None,
     header: str = "오늘의 세무 브리핑",
     overflow: int = 0,
+    bills: int = 0,
 ) -> str:
     """일일 브리핑 전체를 렌더링한다.
 
@@ -182,6 +208,13 @@ def render_digest(
     if overflow > 0:
         lines.append("")
         lines.append(f"이 밖에 {overflow}건이 더 있습니다. 사이트에서 확인하세요.")
+
+    # **법안은 카드로 보내지 않고 건수만 알린다.**
+    # 아직 법이 아니라 지금 할 일이 없다. 그런데 카드로 내보냈더니
+    # 여섯 자리를 전부 법안이 차지하고 시행 중인 개정이 밀려났다.
+    if bills > 0:
+        lines.append("")
+        lines.append(f"국회에 발의된 세법 개정안이 {bills}건 있습니다 (아직 법이 아닙니다).")
 
     if site_url:
         lines.append("")
