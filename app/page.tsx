@@ -5,8 +5,9 @@ import { FilterBar } from '@/components/FilterBar';
 import { IndexRail } from '@/components/IndexRail';
 import { Masthead } from '@/components/Masthead';
 import { MonthStrip } from '@/components/MonthNav';
+import { PolicyRadar, TodayBrief } from '@/components/TodayBrief';
 import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
-import { groupByDate, todayLabel } from '@/lib/format';
+import { daysUntil, groupByDate, seoulToday, todayLabel } from '@/lib/format';
 import type { IndustryBucket, MonthBucket, PublicContentSummary, PublicFeed } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,14 @@ const LEAD_MAX = 4;
  * 훑다가 멈추지, "3페이지에 있었는데"로 기억하지 않는다.
  */
 const PAGE_SIZE = 30;
+
+/**
+ * "먼저 볼 것" 에 올릴 시행일 범위.
+ *
+ * 90일이면 다음 신고 한 번은 지나간다. 그 뒤에 시행되는 것은 지금 읽어도
+ * 그때 다시 봐야 하므로, 오늘 화면의 맨 윗자리를 쓸 이유가 없다.
+ */
+const LEAD_HORIZON_DAYS = 90;
 
 function pick(params: Record<string, string | string[] | undefined>, key: string) {
   const value = params[key];
@@ -77,7 +86,18 @@ function nextPageQuery(
  */
 function isLead(item: PublicContentSummary): boolean {
   if (item.actionable === false) return false;
-  return item.risk_level === 'CRITICAL' || item.risk_level === 'HIGH';
+  if (item.risk_level !== 'CRITICAL' && item.risk_level !== 'HIGH') return false;
+
+  // **먼 미래는 오늘 볼 것이 아니다.**
+  //
+  // 시행예정 법령이 들어오자 "먼저 볼 것" 1등이 2027년, 4등이 2028년
+  // 시행분이 됐다. 중요도만 보고 골랐기 때문이다. 2028년에 바뀔 것을
+  // 오늘 화면 맨 위에 놓으면, 정작 이번 달에 할 일이 아래로 밀린다.
+  //
+  // 앞으로 올 것은 /upcoming 이 남은 기간별로 보여준다. 여기서는
+  // 이미 시행 중이거나 곧 닥치는 것만 다룬다.
+  const days = daysUntil(item.effective_date);
+  return days === null || days <= LEAD_HORIZON_DAYS;
 }
 
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
@@ -93,10 +113,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   let feed: PublicFeed | null = null;
   let months: MonthBucket[] = [];
   let industries: IndustryBucket[] = [];
+  let upcoming: PublicFeed | null = null;
   let error: string | null = null;
 
   try {
-    [feed, months, industries] = await Promise.all([
+    [feed, months, industries, upcoming] = await Promise.all([
       publicApi.feed({
         q,
         month,
@@ -110,12 +131,16 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       }),
       publicApi.months(),
       publicApi.industries(),
+      // 시행 예정 총건수. 화면에 나온 30건에서 세면 실제보다 적게 나온다 —
+      // 레일에 15 라고 떴는데 실제로는 34 건이었다.
+      publicApi.feed({ effective_from: seoulToday(), limit: 1 }),
     ]);
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
 
   const items = feed?.items ?? [];
+  const upcomingCount = upcoming?.total ?? 0;
   const activeMonth = months.find((m) => m.month === month);
   const activeIndustries = industries.filter((item) =>
     (pick(params, 'industries') ?? []).includes(item.code),
@@ -164,10 +189,29 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <div className="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
           {/* ── 좌측: 색인 레일 ── */}
           <div className="hidden lg:sticky lg:top-6 lg:block lg:self-start">
-            <IndexRail industries={industries} months={months} />
+            <IndexRail
+              industries={industries}
+              months={months}
+              upcomingCount={upcomingCount}
+            />
           </div>
 
           <div className="min-w-0">
+            {/*
+              오늘 볼 것부터. 검색·필터는 그 아래다 —
+              화면을 여는 사람은 대개 무언가를 찾으러 온 게 아니라
+              "뭐 있나" 를 보러 온다.
+            */}
+            {!filtered && items.length > 0 ? (
+              <div className="mb-6 flex flex-col gap-3">
+                <TodayBrief
+                  leadCount={lead.length}
+                  upcomingCount={upcomingCount}
+                  items={items}
+                />
+              </div>
+            ) : null}
+
             <div className="panel px-4 py-3.5">
               <FilterBar />
             </div>
@@ -230,6 +274,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                       </section>
                     ))}
                   </div>
+
+                  {!filtered ? <PolicyRadar items={items} /> : null}
 
                   {feed && feed.total > items.length ? (
                     <div className="mt-8 flex flex-col items-center gap-2.5">

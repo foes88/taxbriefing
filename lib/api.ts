@@ -91,6 +91,9 @@ export interface FeedFilters {
   /** 공포일 기간 검색 (YYYY-MM-DD) */
   promulgated_from?: string;
   promulgated_to?: string;
+  /** 시행일 기간. `effective_from = 오늘` 이면 시행 예정만 남는다. */
+  effective_from?: string;
+  effective_to?: string;
   deadline_within_days?: number;
   limit?: number;
   offset?: number;
@@ -105,6 +108,8 @@ function toQuery(filters: FeedFilters): string {
   if (filters.month) params.set('month', filters.month);
   if (filters.promulgated_from) params.set('promulgated_from', filters.promulgated_from);
   if (filters.promulgated_to) params.set('promulgated_to', filters.promulgated_to);
+  if (filters.effective_from) params.set('effective_from', filters.effective_from);
+  if (filters.effective_to) params.set('effective_to', filters.effective_to);
   if (filters.deadline_within_days) {
     params.set('deadline_within_days', String(filters.deadline_within_days));
   }
