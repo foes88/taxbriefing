@@ -129,6 +129,19 @@ def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict
 
 
 def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
+    """AI 요약 전까지 쓰는 임시 문구.
+
+    **심판례에 법령 문구를 쓰면 거짓말이 된다.**
+    처음에 하나로 뭉쳐 놨더니 이런 문장이 나왔다.
+
+        「…심판청구가 적법한지 여부 — 기각」이(가) 개정되어
+        시행일은 원문 확인이 필요합니다.
+
+    심판례는 개정된 것이 아니고 시행일도 없다. 종류를 보고 말을 바꾼다.
+    """
+    if meta.get("content_kind") == "TRIBUNAL_DECISION":
+        return _tribunal_summary(meta)
+
     name = raw.title
     revision = meta.get("revision_type") or "개정"
     if effective:
@@ -136,6 +149,24 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
     else:
         when = "시행일은 원문 확인이 필요합니다"
     return f"「{name}」이(가) {revision}되어 {when}."[:250]
+
+
+def _tribunal_summary(meta: dict) -> str:
+    """심판례 임시 문구. 결론과 세목만 말하고 나머지는 본문에 맡긴다."""
+    outcome = str(meta.get("result") or "").strip()
+    tax_type = str(meta.get("tax_type") or "").strip()
+    agency = str(meta.get("disposition_agency") or "").strip()
+
+    parts = ["조세심판원 결정"]
+    if tax_type:
+        parts.append(f"{tax_type} 관련")
+    if agency:
+        parts.append(f"{agency} 처분")
+    head = " · ".join(parts)
+
+    if outcome:
+        return f"{head} — 청구 {outcome}. 판단 요지와 이유는 본문에서 확인하세요."[:250]
+    return f"{head}. 판단 요지와 이유는 본문에서 확인하세요."[:250]
 
 
 def run(
