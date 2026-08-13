@@ -29,6 +29,10 @@ class CollectStats:
     new: int = 0
     changed: int = 0
     unchanged: int = 0
+    #: 주제가 맞지 않아 담지 않은 것. 뉴스 RSS 에서 세무와 무관한 기사가
+    #: 여기 잡힌다. **숫자로 남긴다** — 조용히 버리면 수집기가 고장 났을 때
+    #: "원래 안 오는 건가" 와 구분되지 않는다.
+    off_topic: int = 0
     errors: int = 0
     error_details: list[dict[str, Any]] = field(default_factory=list)
 

@@ -21,6 +21,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
+from app.domain.news_topic import is_tax_news
 from app.models.tables import Source
 from app.services.collectors.base import CollectStats
 from app.services.ingest import ingest
@@ -158,6 +159,20 @@ class RssCollector:
             stats.discovered += 1
 
             if since and item.published_at and item.published_at.date() < since:
+                continue
+
+            # **세무 기사가 아니면 담지도 않는다.**
+            #
+            # 세무 전문지 RSS 라도 기업 홍보와 지역 행사가 섞여 온다.
+            # 112건 중 39건(34%)이 이랬다.
+            #
+            #     하나금융그룹, JOB매칭 페스타 in 대전 성료!!!
+            #     넷마블문화재단, 게임소통학교 성료
+            #
+            # 화면에서만 걸러도 되지만, 그러면 안 볼 것을 계속 받아 쌓는다.
+            # 저장하지 않으면 백업도 색인도 그만큼 가벼워진다.
+            if not is_tax_news(item.title):
+                stats.off_topic += 1
                 continue
 
             try:

@@ -38,22 +38,20 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   const params = await searchParams;
   const q = typeof params.q === 'string' ? params.q : undefined;
   const days = Number(params.days) || 30;
-  // 세무 낱말이 없는 기사도 볼 것인가. 기본은 세무 기사만.
-  const allTopics = params.all === '1';
   const show = Math.min(200, Math.max(PAGE_SIZE, Number(params.show) || PAGE_SIZE));
 
   let feed: NewsFeed | null = null;
   let error: string | null = null;
 
   try {
-    feed = await publicApi.news({ q, days, all_topics: allTopics, limit: show });
+    feed = await publicApi.news({ q, days, limit: show });
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
 
   const shown = feed?.items.length ?? 0;
   const remaining = Math.max(0, (feed?.total ?? 0) - shown);
-  const keep = `days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}${allTopics ? '&all=1' : ''}`;
+  const keep = `days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
   const moreHref = `/news?${keep}&show=${show + PAGE_SIZE}`;
 
   const groups = groupByDate(feed?.items ?? [], (i) => i.published_at);
@@ -107,7 +105,6 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
               className="h-10 min-w-0 flex-1 rounded-sharp border border-rule-strong bg-surface px-3.5 text-[14.5px] text-ink placeholder:text-ink-3 focus:border-ink focus:outline-none"
             />
             <input type="hidden" name="days" value={String(days)} />
-            {allTopics ? <input type="hidden" name="all" value="1" /> : null}
             <button type="submit" className="btn-primary h-10 shrink-0 py-0">
               검색
             </button>
@@ -118,9 +115,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
             {RANGES.map((range) => (
               <Link
                 key={range.days}
-                href={`/news?days=${range.days}${q ? `&q=${encodeURIComponent(q)}` : ''}${
-                  allTopics ? '&all=1' : ''
-                }`}
+                href={`/news?days=${range.days}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
                 className={`rounded-sharp border px-2.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
                   days === range.days
                     ? 'border-ink bg-ink text-surface'
@@ -131,23 +126,6 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
               </Link>
             ))}
 
-            {/*
-              걸러 내고 있다는 사실을 숨기지 않는다. 세무 전문지 RSS 라도
-              기업 홍보와 지역 행사가 섞여 들어와서 112건 중 39건이 그랬다.
-              다만 우리가 거른다는 것은 알려야 하고, 되돌릴 수 있어야 한다.
-            */}
-            <Link
-              href={`/news?days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}${
-                allTopics ? '' : '&all=1'
-              }`}
-              className={`ml-auto rounded-sharp border px-2.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
-                allTopics
-                  ? 'border-ink bg-ink text-surface'
-                  : 'border-rule-strong text-ink-3 hover:border-ink hover:text-ink'
-              }`}
-            >
-              {allTopics ? '세무 기사만' : '세무 무관 기사도'}
-            </Link>
           </div>
         </div>
 

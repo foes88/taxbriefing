@@ -89,10 +89,20 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         else:
             # 어댑터가 있는 출처만 돈다. 등록만 되고 수집 방법이 없는 출처는 건너뛴다.
+            #
+            # **꺼 둔 출처는 돌지 않는다.**
+            # 네이버 뉴스 검색이 그렇다 — 네이버가 검색 API 신규 등록을
+            # 중단해서 401 이 계속 났고, 키를 다시 받을 방법이 없다.
+            # 그런데도 매 실행마다 8건씩 실패해 "오류 8" 이 찍혔다.
+            # 고칠 수 없는 오류가 매일 찍히면, 고칠 수 있는 오류가 났을 때
+            # 그게 안 보인다.
+            #
+            # 이름으로 거르지 않고 status 로 거른다 — 왜 껐는지는
+            # settings.disabled_reason 에 남아 있다.
             sources = [
                 s
                 for s in db.execute(select(Source).order_by(Source.display_name)).scalars()
-                if adapters_for(s)
+                if adapters_for(s) and s.status != "DISABLED"
             ]
 
         for source in sources:
@@ -119,7 +129,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 print(
                     f"  조회 {stats.discovered} · 신규 {stats.new} · 변경 {stats.changed} "
-                    f"· 동일 {stats.unchanged} · 오류 {stats.errors}  [{run.status}]"
+                    f"· 동일 {stats.unchanged}"
+                    # 세무와 무관해서 안 담은 것. 조용히 버리면 수집기가
+                    # 고장 났을 때 "원래 안 오는 건가" 와 구분되지 않는다.
+                    + (f" · 세무 무관 {stats.off_topic}" if stats.off_topic else "")
+                    + f" · 오류 {stats.errors}  [{run.status}]"
                 )
                 for detail in stats.error_details[:5]:
                     print(f"    ! {detail['item']}: {detail['error'][:120]}")
