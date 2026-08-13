@@ -64,11 +64,29 @@ def _text_list(body: dict[str, Any], key: str, limit: int = 6) -> list[str]:
     return out
 
 
-def build_search_text(title: str, one_line: str | None, body: dict[str, Any]) -> str:
+def build_search_text(
+    title: str,
+    one_line: str | None,
+    body: dict[str, Any],
+    *,
+    raw_text: str | None = None,
+) -> str:
     """검색 대상 텍스트를 한 덩어리로 합친다.
 
     제목·요약만 검색하면 "학원 4대보험" 같은 실무 질문이 안 걸린다.
     정작 답은 개정 내용과 사업자 할 일에 들어 있기 때문이다.
+
+    **AI 필드만 보면 심판례가 통째로 빠진다.**
+    이 함수는 changes·required_actions 같은 AI 출력에서 텍스트를 모은다.
+    그런데 심판례는 AI 를 돌리지 않는다 — 원문에 이미 쟁점과 판단이 갈려 있어서
+    모델을 쓸 자리가 아니기 때문이다. 그 결과 심판례 20건의 search_text 가
+    전부 비었고, 검색이 이렇게 됐다.
+
+        가산세     검색 1건 / 본문 7건
+        세금계산서  검색 5건 / 본문 11건
+
+    화면은 "가지급금, 업무용승용차" 로 검색하라고 적어 두고 정작 못 찾았다.
+    그래서 `raw_text` 를 받는다 — AI 출력이 없으면 원문 자체를 검색 대상으로 쓴다.
     """
     parts: list[str] = [title]
     if one_line:
@@ -78,6 +96,22 @@ def build_search_text(title: str, one_line: str | None, body: dict[str, Any]) ->
     for item in body.get("deadlines") or []:
         if isinstance(item, dict) and item.get("label"):
             parts.append(str(item["label"]))
+
+    # AI 출력이 없으면 원문을 쓴다. 심판례·법안처럼 모델을 돌리지 않는 종류다.
+    #
+    # **자르지 않는다.** 처음에 4,000자로 끊었더니 여전히 놓쳤다.
+    #
+    #     가산세     검색 5건 / 본문 7건
+    #     세금계산서  검색 9건 / 본문 11건
+    #
+    # 심판례의 [판단 이유] 는 수천 자이고, 쟁점 단어가 앞쪽에 몰려 있다는
+    # 가정이 틀렸다. 사실관계를 길게 적은 뒤 뒤쪽에서 쟁점을 다룬다.
+    # 절반만 찾아 주는 검색은 안 쓰느니만 못하다 — 없는 줄 알고 넘어가니까.
+    #
+    # 저장 비용은 감당할 만하다. 심판례 한 건이 수 KB 이고, 수천 건이 돼도
+    # 수십 MB 다. 그 대신 얻는 것은 "찾으면 나온다" 는 신뢰다.
+    if len(parts) <= 2 and raw_text:
+        parts.append(raw_text)
 
     # 중복 제거하되 순서는 유지한다. 같은 문구가 여러 번 들어가도 검색에는
     # 도움이 안 되고 컬럼만 커진다.

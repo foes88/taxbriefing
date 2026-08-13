@@ -21,11 +21,25 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
 from app.domain.industry import Industry, is_internal_document, label
-from app.models.tables import ContentVersion, TaxContent
+from app.models.tables import ContentSource, ContentVersion, RawContentVersion, TaxContent
 from app.services.ai.classify import build_search_text, classify_industries
 from app.services.ai.groq_provider import GroqProvider
 
 logger = get_logger(__name__)
+
+
+def _raw_text_of(db, content: TaxContent) -> str | None:
+    """이 콘텐츠의 근거 원문.
+
+    심판례·법안은 AI 를 돌리지 않으므로 검색할 텍스트가 원문밖에 없다.
+    근거가 여러 개면 이어 붙인다 — 어느 쪽에 쟁점 단어가 있을지 모른다.
+    """
+    rows = db.execute(
+        select(RawContentVersion.normalized_text)
+        .join(ContentSource, ContentSource.raw_content_version_id == RawContentVersion.id)
+        .where(ContentSource.tax_content_id == content.id)
+    ).scalars().all()
+    return "\n".join(rows) if rows else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,10 +73,14 @@ def main(argv: list[str] | None = None) -> int:
 
         for index, content in enumerate(contents, start=1):
             body: dict = {}
+            raw_text: str | None = None
             if content.current_version_id:
                 version = db.get(ContentVersion, content.current_version_id)
-                if version and isinstance(version.body, dict):
-                    body = version.body
+                if version:
+                    if isinstance(version.body, dict):
+                        body = version.body
+                    # AI 를 안 돌리는 종류(심판례·법안)는 원문이 검색 대상이다.
+                    raw_text = _raw_text_of(db, content)
 
             print(f"[{index}/{len(contents)}] {content.title[:44]}")
 
@@ -70,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
             # 정작 판단이 필요한 개정에 써야 한다.
             if is_internal_document(content.title):
                 content.search_text = build_search_text(
-                    content.title, content.one_line_summary, body
+                    content.title, content.one_line_summary, body, raw_text=raw_text
                 )
                 # 숨김 표시를 **명시적으로** 남긴다. 예전에는 빈 배열로 뒀는데,
                 # 모델이 업종을 못 붙인 것과 구분되지 않아 진짜 세법이 같이
@@ -95,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
                 continue
 
             content.search_text = build_search_text(
-                content.title, content.one_line_summary, body
+                content.title, content.one_line_summary, body, raw_text=raw_text
             )
             content.industries = result.codes
 

@@ -36,10 +36,10 @@ from app.domain.enums import (
     SourceRole,
 )
 from app.models.tables import (
+    ContentSource,
     RawContent,
     RawContentVersion,
     Source,
-    TaxContent,
     User,
 )
 from app.services import content as content_service
@@ -237,8 +237,16 @@ def run(
                 continue
 
         # 이미 콘텐츠가 있으면 건너뛴다 (멱등).
+        #
+        # **제목으로 판정하지 않는다.** 국회 의안은 제목이 겹친다 —
+        # 여러 의원이 각자 "조세특례제한법 일부개정법률안" 을 발의하기 때문이다.
+        # 제목 기준으로 걸렀더니 서로 다른 40개 법안이 11개로 뭉쳤다.
+        #
+        # 원문 버전 하나가 콘텐츠 하나다. 그게 실제 관계다.
         exists = db.execute(
-            select(TaxContent).where(TaxContent.title == raw.title).limit(1)
+            select(ContentSource.tax_content_id)
+            .where(ContentSource.raw_content_version_id == version.id)
+            .limit(1)
         ).scalar_one_or_none()
         if exists is not None:
             stats["건너뜀"] += 1
