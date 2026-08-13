@@ -114,7 +114,12 @@ export function FilterBar() {
             type="search"
             name="q"
             defaultValue={params.get('q') ?? ''}
-            placeholder="상담 내용으로 검색 — 학원 4대보험, 배달 원천징수"
+            /*
+              휴대폰에서 "상담 내용으로 검색 —" 까지만 보이고 잘렸다.
+              설명이 잘리면 안내가 아니라 고장으로 읽힌다. 예시만 남긴다 —
+              무엇을 넣는 칸인지는 예시가 더 잘 말한다.
+            */
+            placeholder="학원 4대보험, 배달 원천징수"
             aria-label="키워드 검색"
             className="h-10 min-w-0 flex-1 rounded-[4px] border border-rule-strong bg-surface px-3.5 text-[15px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
           />

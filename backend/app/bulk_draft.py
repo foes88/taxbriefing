@@ -311,6 +311,10 @@ def run(
                 now=dt.datetime.now(dt.UTC),
             )
             content.content_kind = _decide_kind(meta)
+            # 심판례 결론. 제목에서 정규식으로 뽑아 쓰던 값을 컬럼으로 옮겼다 —
+            # 수집기 버전에 따라 "— 기각" 과 "(기각)" 이 섞이면서 화면의
+            # 결론 필터가 전부 0 이 됐었다.
+            content.outcome = str(meta.get("result") or "").strip() or None
             content.one_line_summary = _summary(raw, meta, effective)
             content.promulgation_date = promulgated
             content.effective_date = effective

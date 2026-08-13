@@ -198,10 +198,18 @@ export function TribunalArticle({
   tribunal: TribunalBody;
 }) {
   const spec = OUTCOME[tribunal.outcome];
-  const decided = content.promulgation_date ?? content.updated_at.slice(0, 10);
 
   // 사건명은 제목에 이미 들어 있다. 본문에서 한 번 더 보여줄 이유가 없다.
   const sections = tribunal.sections.filter((s) => s.label !== '사건명');
+
+  /*
+    제목 끝의 " — 기각" 을 뗀다. 바로 위 칩이 "청구 기각" 이라고
+    말하고 있어서 같은 말이 두 번 나온다. 목록에서는 그 접미사가
+    한 줄 안에서 결론을 알려주는 역할을 하지만, 여기서는 아니다.
+  */
+  const title = tribunal.outcome
+    ? content.title.replace(new RegExp(`\\s*[—-]\\s*${tribunal.outcome}\\s*$`), '')
+    : content.title;
 
   return (
     <article className="min-w-0 border border-rule bg-surface">
@@ -211,7 +219,15 @@ export function TribunalArticle({
           <OutcomeMark outcome={tribunal.outcome} />
         </div>
 
-        <h1 className="mt-3.5 max-w-reading text-display text-ink">{content.title}</h1>
+        {/*
+          심판례 사건명은 제목이 아니라 한 문장짜리 설명이다.
+          "대리운전 관련 사업자등록을 하지 아니한 청구인에 대하여,
+          원천징수되지 아니한 대리운전 관련 사업소득을 총급여액 등에서
+          제외하여 근로장려금을 결정한 처분의 당부"
+          이걸 법령 제목과 같은 크기로 놓으면 휴대폰에서 일곱 줄이 되고
+          화면 하나를 통째로 먹는다. 한 단계 낮춘다.
+        */}
+        <h1 className="mt-3.5 max-w-reading text-headline text-ink">{title}</h1>
 
         {spec ? (
           <p className="mt-3 text-[14px] font-medium text-ink-3">{spec.gloss}</p>
@@ -219,15 +235,22 @@ export function TribunalArticle({
       </header>
 
       {/*
-        시행일 자리에 의결일이 온다. 세목과 처분청은 "이게 우리 업체와
-        비슷한 상황인가"를 가르는 첫 단서라 위에 둔다.
+        세목과 처분청은 "이게 우리 업체와 비슷한 상황인가"를 가르는 첫
+        단서라 위에 둔다.
+
+        **없는 값은 넣지 않는다.** 예전에는 빈 칸에 "원문 확인" 을 넣고
+        의결일 자리에는 오늘 날짜를 찍었다. 3주 전 결정이 오늘 나온 것처럼
+        보였다. 모르면 칸을 빼는 게 맞다.
       */}
       <FactGrid
         cells={[
-          { label: '세목', value: tribunal.tax_type || '원문 확인' },
-          { label: '결론', value: tribunal.outcome ? `청구 ${tribunal.outcome}` : '원문 확인' },
-          { label: '처분청', value: tribunal.disposition_agency || '원문 확인' },
-          { label: '의결일', value: formatDate(decided) },
+          { label: '세목', value: tribunal.tax_type },
+          { label: '결론', value: tribunal.outcome ? `청구 ${tribunal.outcome}` : null },
+          { label: '처분청', value: tribunal.disposition_agency },
+          {
+            label: '의결일',
+            value: content.promulgation_date ? formatDate(content.promulgation_date) : null,
+          },
         ]}
       />
 

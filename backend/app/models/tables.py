@@ -282,6 +282,12 @@ class TaxContent(Base):
     #: 법령인가 심판례인가 (app.domain.enums.ContentKind).
     #: 종류를 모르면 화면이 심판례에도 시행일·상태 배지를 붙이려 한다.
     content_kind: Mapped[str] = mapped_column(Text, nullable=False, default="POLICY")
+    #: 심판례 결론 — 인용 / 일부인용 / 기각 / 각하 / 재조사. 법령은 None.
+    #:
+    #: 제목 끝에 붙여 두고 화면에서 정규식으로 뽑아 쓰다가, 수집기 버전에
+    #: 따라 "— 기각" 과 "(기각)" 이 섞이면서 필터가 전부 0 이 됐다.
+    #: 걸러 낼 값은 컬럼으로 둔다 — 그래야 서버가 세고, 세는 수가 맞는다.
+    outcome: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     one_line_summary: Mapped[str | None] = mapped_column(Text)
     announcement_date: Mapped[dt.date | None] = mapped_column(Date)

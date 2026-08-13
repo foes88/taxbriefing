@@ -174,7 +174,13 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               {scope || '오늘 확인할 세무정보'}
             </h1>
           </div>
-          <p className="max-w-[22rem] text-[13px] leading-relaxed text-ink-3">
+          {/*
+            휴대폰에서는 감춘다. 같은 말이 화면 맨 아래 각주에 또 있고,
+            좁은 화면에서는 제목과 오늘 볼 것 사이를 세 줄짜리 회색 글이
+            가로막는다. 화면을 연 사람이 먼저 만나야 하는 건 이 문장이
+            아니라 오늘 바뀐 것이다.
+          */}
+          <p className="hidden max-w-[22rem] text-[13px] leading-relaxed text-ink-3 sm:block">
             법령·관보 등 <strong className="font-semibold text-ink-2">공식 원문</strong>으로 사실을
             확인하고, 세무전문가가 검수한 내용만 올립니다.
           </p>

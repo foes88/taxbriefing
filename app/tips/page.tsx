@@ -28,14 +28,23 @@ const OUTCOMES = [
   { key: '기각', label: '기각', note: '처분이 유지됨' },
 ] as const;
 
-/** 제목 끝의 " — 인용" 에서 결론을 읽는다. 수집기가 주문에서 뽑아 붙인 값이다. */
-function outcomeOf(item: PublicContentSummary): string | null {
-  const match = item.title.match(/—\s*(인용|일부인용|기각|각하|재조사)\s*$/);
-  return match ? match[1] : null;
-}
-
+/**
+ * 제목 끝에 붙어 있던 결론을 뗀다.
+ *
+ * 이제 결론은 `item.outcome` 컬럼에 있다. 다만 예전 수집기가 제목에
+ * 박아 둔 것이 데이터에 남아 있고, 그마저 두 가지 모양이 섞여 있다.
+ *
+ *     …처분의 당부 — 기각
+ *     …환급할 수 있는지 여부 (기각)
+ *
+ * 결론 칩을 따로 그리므로 제목에서는 뗀다. 두 모양 다 받는다 —
+ * 남아 있는 데이터를 화면이 감당한다.
+ */
 function titleWithoutOutcome(item: PublicContentSummary): string {
-  return item.title.replace(/\s*—\s*(인용|일부인용|기각|각하|재조사)\s*$/, '');
+  return item.title
+    .replace(/\s*[—-]\s*(인용|일부인용|기각|각하|재조사)\s*$/, '')
+    .replace(/\s*\((인용|일부인용|기각|각하|재조사)\)\s*$/, '')
+    .trim();
 }
 
 export default async function TipsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -45,19 +54,36 @@ export default async function TipsPage({ searchParams }: { searchParams: SearchP
   const show = Math.min(200, Math.max(PAGE_SIZE, Number(params.show) || PAGE_SIZE));
 
   let feed: PublicFeed | null = null;
+  let counts: Record<string, number> = {};
+  let total = 0;
   let error: string | null = null;
 
   try {
-    feed = await publicApi.feed({ q, content_kind: ['TRIBUNAL'], limit: show });
+    /*
+      **결론 건수는 서버에 묻는다.**
+
+      예전에는 불러온 스무 건 안에서 셌다. 그러면 화면에 있는 것만 세게
+      되고 실제 건수와 어긋난다 — 시행예정이 "15" 로 떴다가 실제로는
+      34 건이었던 것과 같은 잘못이다.
+
+      limit=1 로 부르는 이유는 total 만 필요하기 때문이다. 목록은 따로
+      한 번 더 부른다.
+    */
+    const [list, whole, ...byOutcome] = await Promise.all([
+      publicApi.feed({ q, content_kind: ['TRIBUNAL'], outcome, limit: show }),
+      publicApi.feed({ q, content_kind: ['TRIBUNAL'], limit: 1 }),
+      ...OUTCOMES.map((o) =>
+        publicApi.feed({ q, content_kind: ['TRIBUNAL'], outcome: o.key, limit: 1 }),
+      ),
+    ]);
+    feed = list;
+    total = whole.total;
+    counts = Object.fromEntries(OUTCOMES.map((o, i) => [o.key, byOutcome[i].total]));
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
 
-  const all = feed?.items ?? [];
-  const items = outcome ? all.filter((i) => outcomeOf(i) === outcome) : all;
-  const counts = Object.fromEntries(
-    OUTCOMES.map((o) => [o.key, all.filter((i) => outcomeOf(i) === o.key).length]),
-  );
+  const items = feed?.items ?? [];
 
   return (
     <div className="min-h-screen">
@@ -90,11 +116,11 @@ export default async function TipsPage({ searchParams }: { searchParams: SearchP
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <span className="label pr-0.5">결론</span>
-          <Chip href="/tips" label="전체" count={all.length} active={!outcome} />
+          <Chip href={q ? `/tips?q=${encodeURIComponent(q)}` : '/tips'} label="전체" count={total} active={!outcome} />
           {OUTCOMES.map((o) => (
             <Chip
               key={o.key}
-              href={`/tips?outcome=${encodeURIComponent(o.key)}`}
+              href={`/tips?outcome=${encodeURIComponent(o.key)}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
               label={o.label}
               count={counts[o.key] ?? 0}
               active={outcome === o.key}
@@ -125,7 +151,7 @@ export default async function TipsPage({ searchParams }: { searchParams: SearchP
             <div className="mt-7 flex items-center justify-between gap-3 pb-2.5">
               <h2 className="section-mark">최근 결정</h2>
               <span className="tabular shrink-0 text-[12.5px] font-semibold text-ink-3">
-                {items.length}건
+                {feed?.total ?? items.length}건
               </span>
             </div>
             <ul className="panel divide-y divide-rule">
@@ -149,7 +175,7 @@ export default async function TipsPage({ searchParams }: { searchParams: SearchP
  * 시행일·상태 배지는 없다 — 심판례는 제도가 아니다.
  */
 function TipRow({ item }: { item: PublicContentSummary }) {
-  const outcome = outcomeOf(item);
+  const outcome = item.outcome ?? null;
   const accepted = outcome === '인용' || outcome === '일부인용';
 
   return (

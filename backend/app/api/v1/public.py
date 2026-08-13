@@ -78,6 +78,10 @@ class PublicContentSummary(BaseModel):
     #: 법령인가 심판례인가 (POLICY / TRIBUNAL / INTERPRETATION / BILL / SUPPORT).
     #: 화면이 시행일·상태 배지를 붙일지 말지 이 값으로 정한다.
     content_kind: str = "POLICY"
+    #: 심판례 결론 — 인용 / 일부인용 / 기각 / 각하 / 재조사. 법령은 None.
+    #: 화면이 제목에서 뽑아 쓰던 값이다. 수집기 버전에 따라 "— 기각" 과
+    #: "(기각)" 이 섞이면서 결론 필터가 전부 0 이 됐다.
+    outcome: str | None = None
     #: 달라지는 것이나 할 일이 하나라도 있는가.
     #:
     #: "먼저 볼 것"에 올릴지 판단하는 데 쓴다. 실질 변경이 없는 개정도
@@ -184,6 +188,7 @@ def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSu
         industries=list(content.industries or []),
         industry_labels=[industry.label(code) for code in (content.industries or [])],
         content_kind=content.content_kind,
+        outcome=content.outcome,
         actionable=actionable,
     )
 
@@ -331,6 +336,9 @@ def public_feed(
     content_kind: Annotated[
         list[str] | None, Query(description="POLICY / TRIBUNAL / INTERPRETATION / BILL / SUPPORT")
     ] = None,
+    outcome: Annotated[
+        str | None, Query(description="심판례 결론 — 인용 / 일부인용 / 기각 / 각하 / 재조사")
+    ] = None,
     month: Annotated[str | None, Query(description="공포월 YYYY-MM")] = None,
     promulgated_from: Annotated[dt.date | None, Query(description="공포일 시작")] = None,
     promulgated_to: Annotated[dt.date | None, Query(description="공포일 종료")] = None,
@@ -377,6 +385,9 @@ def public_feed(
         stmt = stmt.where(
             or_(*[TaxContent.industries.contains([code]) for code in industries])
         )
+    if outcome:
+        # 심판례 결론. 컬럼으로 두었기에 서버가 거르고, 그래서 total 이 맞는다.
+        stmt = stmt.where(TaxContent.outcome == outcome)
     if content_kind:
         stmt = stmt.where(TaxContent.content_kind.in_(content_kind))
     else:

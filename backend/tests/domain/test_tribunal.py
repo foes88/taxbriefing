@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import ClassVar
 
-from app.services.collectors.tribunal import build_body, read_outcome
+from app.services.collectors.tribunal import _parse_date, build_body, read_outcome
 
 
 class TestReadOutcome:
@@ -78,3 +79,31 @@ class TestBuildBody:
 
     def test_empty_detail_gives_empty_body(self):
         assert build_body({}) == ""
+
+
+class TestParseDate:
+    """의결일.
+
+    법제처는 target 마다 날짜 표기가 다르다. 법령은 `20260813`,
+    심판례는 `2026.07.20` 이다. 점을 안 떼는 바람에 의결일이 20건 전부
+    비었고, 화면은 그 빈 자리에 오늘 날짜를 찍었다 — 3주 전 결정이
+    오늘 나온 것처럼 보였다.
+    """
+
+    def test_dotted(self):
+        assert _parse_date("2026.07.20") == dt.date(2026, 7, 20)
+
+    def test_plain(self):
+        assert _parse_date("20260720") == dt.date(2026, 7, 20)
+
+    def test_hyphen(self):
+        assert _parse_date("2026-07-20") == dt.date(2026, 7, 20)
+
+    def test_unknown_shape_is_none(self):
+        """모르는 모양은 None 이다. **추측해서 채우지 않는다.**"""
+        assert _parse_date("2026년 7월") is None
+        assert _parse_date("") is None
+        assert _parse_date(None) is None
+
+    def test_impossible_date_is_none(self):
+        assert _parse_date("20260732") is None

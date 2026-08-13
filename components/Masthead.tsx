@@ -38,9 +38,17 @@ export function Masthead({
         </Link>
       </div>
 
+      {/*
+        탭 세 개에 각각 부제가 붙어서 320px 짜리 화면에서는 마지막 탭이
+        잘렸다. 부제를 지우는 선택지는 없다 — "검수 완료" 와 "확인 전"
+        의 구분이 이 서비스에서 가장 중요한 표시다. 대신 옆으로 민다.
+      */}
       {active ? (
-        <nav aria-label="구분" className="mx-auto max-w-page px-4">
-          <div className="flex gap-1">
+        <nav
+          aria-label="구분"
+          className="mx-auto max-w-page overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex w-max gap-1">
             <Tab href="/" label="정책·법령" note="검수 완료" current={active === 'policy'} />
             <Tab href="/tips" label="실무 TIP" note="심판례" current={active === 'tips'} />
             <Tab href="/news" label="뉴스" note="확인 전" current={active === 'news'} unverified />

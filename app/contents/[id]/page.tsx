@@ -7,7 +7,7 @@ import { Masthead } from '@/components/Masthead';
 import { Caveat, DeadlineMark, RiskMark, StatusSeal } from '@/components/Seal';
 import { TribunalArticle } from '@/components/TribunalArticle';
 import { ApiRequestError, publicApi } from '@/lib/api';
-import { daysUntil, effectiveLabel, formatDateTime } from '@/lib/format';
+import { daysUntil, effectiveLabel, formatDateTime, stripRevisionSuffix } from '@/lib/format';
 import type { PublicContentDetail, TribunalBody } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -111,7 +111,9 @@ export default async function ContentDetailPage({
                   <DateRow label="발표일" value={content.announcement_date} />
                   <DateRow label="공포일" value={content.promulgation_date} />
                   <DateRow label="시행일" value={content.effective_date} emphasis />
-                  <DateRow label="신청 마감" value={content.application_end} />
+                  {content.application_end ? (
+                    <DateRow label="신청 마감" value={content.application_end} />
+                  ) : null}
                 </dl>
               </div>
             )}
@@ -178,11 +180,13 @@ function PolicyArticle({
   const effective = effectiveLabel(content.effective_date);
 
   // 목록과 같은 규칙 — 요약이 제목을 통째로 품고 있으면 제목을 그대로 쓴다.
+  // 개정 표시는 뗀다. 오른쪽 일자표가 공포일·시행일을 이미 말한다.
+  const name = stripRevisionSuffix(content.title);
   const summary = content.one_line_summary?.trim();
   const strip = (s: string) => s.replace(/[「」·\s()]/g, '');
   const useSummary = !!summary && !strip(summary).includes(strip(content.title));
-  const headline = useSummary ? summary! : content.title;
-  const statute = useSummary ? content.title : null;
+  const headline = useSummary ? summary! : name;
+  const statute = useSummary ? name : null;
 
   return (
     <article className="min-w-0 border border-rule bg-surface">
@@ -230,13 +234,23 @@ function PolicyArticle({
         ]}
       />
 
-      {/* 좁은 화면에서는 일자표도 본문 안에 둔다. */}
+      {/*
+        좁은 화면에서는 일자표도 본문 안에 둔다.
+
+        **시행일은 빼고.** 바로 위 한눈 표의 "언제부터" 가 같은 날짜를
+        이미 말한다. 두 표가 연달아 나오면서 같은 날이 세 번 나왔다.
+
+        신청 마감은 있을 때만. 대부분의 법령에는 신청이라는 게 없는데
+        매번 "확인 필요" 를 띄우면 정작 마감이 진짜 있는 건에서
+        그 표시가 안 읽힌다.
+      */}
       <div className="lg:hidden">
         <dl className="grid grid-cols-2 border-b border-rule">
           <DateCell label="발표일" value={content.announcement_date} />
           <DateCell label="공포일" value={content.promulgation_date} />
-          <DateCell label="시행일" value={content.effective_date} emphasis />
-          <DateCell label="신청 마감" value={content.application_end} />
+          {content.application_end ? (
+            <DateCell label="신청 마감" value={content.application_end} emphasis />
+          ) : null}
         </dl>
       </div>
 

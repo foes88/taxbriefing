@@ -89,6 +89,8 @@ export interface FeedFilters {
   industries?: string[];
   /** 생략하면 법령(POLICY)만 나온다. 심판례를 보려면 명시해야 한다. */
   content_kind?: string[];
+  /** 심판례 결론 — 인용 / 일부인용 / 기각 / 각하 / 재조사. */
+  outcome?: string;
   month?: string;
   /** 공포일 기간 검색 (YYYY-MM-DD) */
   promulgated_from?: string;
@@ -108,6 +110,7 @@ function toQuery(filters: FeedFilters): string {
   filters.risk_level?.forEach((v) => params.append('risk_level', v));
   filters.industries?.forEach((v) => params.append('industries', v));
   filters.content_kind?.forEach((v) => params.append('content_kind', v));
+  if (filters.outcome) params.set('outcome', filters.outcome);
   if (filters.month) params.set('month', filters.month);
   if (filters.promulgated_from) params.set('promulgated_from', filters.promulgated_from);
   if (filters.promulgated_to) params.set('promulgated_to', filters.promulgated_to);

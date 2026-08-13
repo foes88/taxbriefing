@@ -52,9 +52,26 @@ const config: Config = {
           unknown: 'var(--state-unknown)',
         },
       },
+      /*
+       * 큰 글자는 화면 폭을 따라간다.
+       *
+       * 36px 로 고정해 뒀더니 360px 짜리 휴대폰에서 제목 한 줄이
+       * "2026년 7월 1일부터 학원 사업장의 4대보험 가입 기준이 바뀝니다"
+       * 다섯 줄로 흘렀다. 데스크톱에서 존재감을 주던 크기가 휴대폰에서는
+       * 그냥 화면을 다 먹는다.
+       *
+       * 작은 글자(record 18px, 본문 16px)는 고정한다. 그 아래로 줄이면
+       * 읽기 힘들어지지, 공간이 절약되지 않는다.
+       */
       fontSize: {
-        display: ['2.25rem', { lineHeight: '1.22', letterSpacing: '-0.028em', fontWeight: '800' }],
-        headline: ['1.375rem', { lineHeight: '1.38', letterSpacing: '-0.018em', fontWeight: '700' }],
+        display: [
+          'clamp(1.625rem, 5.4vw, 2.25rem)',
+          { lineHeight: '1.24', letterSpacing: '-0.028em', fontWeight: '800' },
+        ],
+        headline: [
+          'clamp(1.1875rem, 3.4vw, 1.375rem)',
+          { lineHeight: '1.4', letterSpacing: '-0.018em', fontWeight: '700' },
+        ],
         /** 목록 제목. 훑을 때 가장 먼저 읽히는 크기다. */
         record: ['1.125rem', { lineHeight: '1.44', letterSpacing: '-0.014em', fontWeight: '700' }],
       },

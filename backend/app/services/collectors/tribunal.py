@@ -99,8 +99,14 @@ class TribunalItem:
 
 
 def _parse_date(value: Any) -> dt.date | None:
-    """`20260813` → date. 형식이 다르면 None — 추측하지 않는다 (§9.4 V2)."""
-    text = str(value or "").strip().replace("-", "")
+    """`20260813` → date. 형식이 다르면 None — 추측하지 않는다 (§9.4 V2).
+
+    **점 구분도 받는다.** 법제처는 target 마다 날짜 표기가 다르다.
+    법령 쪽은 `20260813` 인데 심판례는 `2026.07.20` 으로 준다.
+    점을 안 떼는 바람에 의결일이 20건 전부 비었고, 화면은 그 빈 자리에
+    오늘 날짜를 찍었다. 3주 전 결정이 오늘 나온 것처럼 보였다.
+    """
+    text = str(value or "").strip().replace("-", "").replace(".", "").replace("/", "")
     if len(text) != 8 or not text.isdigit():
         return None
     try:
@@ -318,7 +324,12 @@ class TaxTribunalCollector:
             db,
             source_id=source.id,
             canonical_url=item.canonical_url,
-            title=f"{title} ({result})" if result else str(title),
+            # **결론을 제목에 붙이지 않는다.**
+            # 붙여 뒀더니 수집기 버전에 따라 "— 기각" 과 "(기각)" 이 섞였고,
+            # 화면은 앞의 모양만 찾다가 결론 필터가 전부 0 이 됐다.
+            # 결론은 doc_metadata["result"] 로 내려가 콘텐츠의 outcome 컬럼이
+            # 된다. 거기 있으면 서버가 거를 수 있고, 세는 수가 맞는다.
+            title=str(title),
             publisher=item.authority or "조세심판원",
             raw_body=body,
             published_at=(

@@ -21,22 +21,40 @@ import type { PublicSource } from '@/lib/types';
  * 그래서 시행일 줄을 없애고 이 표로 합쳤다. **같은 사실을 두 번 적지
  * 않는다** — 표가 헤더의 반복이 되면 화면만 길어진다.
  */
-export function FactGrid({ cells }: { cells: { label: string; value: string; tone?: 'soon' | 'plain' }[] }) {
+export function FactGrid({
+  cells,
+}: {
+  cells: ({ label: string; value: string | null; tone?: 'soon' | 'plain' } | null)[];
+}) {
+  /*
+    값이 없는 칸은 그리지 않는다.
+    "처분청 · 원문 확인" 같은 칸이 세 개 늘어서면 표가 아무것도 알려주지
+    않으면서 화면만 먹는다. 모르는 것은 조용히 빼고, 원문 링크는 옆 칸에
+    이미 있다.
+  */
+  const shown = cells.filter(
+    (cell): cell is { label: string; value: string; tone?: 'soon' | 'plain' } =>
+      Boolean(cell && cell.value),
+  );
+  if (shown.length === 0) return null;
+
   return (
-    <dl className="grid grid-cols-1 border-b border-rule sm:grid-cols-2">
-      {cells.map((cell, i) => (
+    /*
+      휴대폰에서도 2열이다. 1열로 두면 네 칸이 세로로 384px 을 먹어서
+      본문이 화면 밖으로 밀린다. 값이 길면 칸 안에서 줄바꿈될 뿐이고,
+      그게 네 번 스크롤하는 것보다 낫다.
+    */
+    <dl className="grid grid-cols-2 border-b border-rule">
+      {shown.map((cell, i) => (
         <div
           key={cell.label}
-          className={`border-rule px-5 py-4 sm:px-8 ${
-            // 2열일 때는 홀수 칸 오른쪽에 선, 1열일 때는 마지막만 빼고 아래에 선.
-            i % 2 === 0 ? 'sm:border-r' : ''
-          } ${i < cells.length - 1 ? 'border-b sm:border-b-0' : ''} ${
-            i < cells.length - 2 ? 'sm:border-b' : ''
-          }`}
+          className={`border-rule px-4 py-3.5 sm:px-8 sm:py-4 ${
+            i % 2 === 0 ? 'border-r' : ''
+          } ${i < shown.length - 2 ? 'border-b' : ''}`}
         >
           <dt className="label">{cell.label}</dt>
           <dd
-            className={`mt-2 text-[15.5px] font-semibold leading-snug ${
+            className={`mt-1.5 text-[15px] font-semibold leading-snug sm:mt-2 sm:text-[15.5px] ${
               cell.tone === 'soon' ? 'text-seal' : 'text-ink'
             }`}
           >
@@ -60,7 +78,9 @@ export function DateCell({
 }) {
   return (
     <div
-      className={`border-rule px-4 py-3.5 [&:nth-child(-n+2)]:border-b [&:nth-child(odd)]:border-r ${
+      // 칸 수가 둘일 수도 셋일 수도 있다. "앞의 두 칸" 이 아니라
+      // "마지막 줄이 아닌 칸" 에 아래 선을 긋는다.
+      className={`border-rule px-4 py-3.5 [&:not(:nth-last-child(-n+2))]:border-b [&:nth-child(odd)]:border-r ${
         emphasis ? 'bg-surface-sunk' : ''
       }`}
     >
@@ -112,7 +132,7 @@ export function DateRow({
 }
 
 /** 글자로 된 서지 항목. 날짜가 아닌 것(청구번호·세목)에 쓴다. */
-export function InfoRow({ label, value }: { label: string; value: string }) {
+export function InfoRow({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <div className="flex items-baseline justify-between gap-3 px-4 py-2.5">

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { Caveat, DeadlineMark, RiskMark, StatusSeal } from './Seal';
-import { daysUntil, effectiveLabel } from '@/lib/format';
+import { daysUntil, effectiveLabel, stripRevisionSuffix } from '@/lib/format';
 import type { PublicContentSummary } from '@/lib/types';
 
 /**
@@ -36,14 +36,18 @@ import type { PublicContentSummary } from '@/lib/types';
  * 시행일은 바로 아래 줄이 이미 말하고 있어 같은 말을 두 번 하게 된다.
  */
 function headlineOf(item: PublicContentSummary): { headline: string; statute: string | null } {
+  // 제목이 제목 자리에 올 때는 개정 표시를 뗀다. 아랫줄이 시행일과
+  // 상태를 이미 말하고 있어서 "(일부개정, 2026-10-01 시행예정)" 은
+  // 같은 말을 괄호로 한 번 더 하는 것이고, 휴대폰에서 한 줄을 더 먹는다.
+  const name = stripRevisionSuffix(item.title);
   const summary = item.one_line_summary?.trim();
-  if (!summary) return { headline: item.title, statute: null };
+  if (!summary) return { headline: name, statute: null };
 
   const strip = (s: string) => s.replace(/[「」·\s()]/g, '');
   if (strip(summary).includes(strip(item.title))) {
-    return { headline: item.title, statute: null };
+    return { headline: name, statute: null };
   }
-  return { headline: summary, statute: item.title };
+  return { headline: summary, statute: name };
 }
 
 export function LeadItem({ item, index }: { item: PublicContentSummary; index: number }) {
@@ -89,7 +93,14 @@ export function LeadItem({ item, index }: { item: PublicContentSummary; index: n
           {showDeadline ? <DeadlineMark days={deadline} /> : null}
         </p>
 
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-3">
+        {/*
+          출처 법령과 업종은 **휴대폰에서 감춘다.**
+          한 행이 제목 두 줄 + 메타 세 줄이 되면 목록을 훑을 수 없다.
+          여기서 훑는 사람이 판단하는 것은 "이걸 열어볼까" 하나뿐이고,
+          그 판단에는 무엇이 바뀌는지와 언제부터인지면 충분하다.
+          법령명과 업종은 열면 바로 나온다.
+        */}
+        <p className="mt-1.5 hidden flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-3 sm:flex">
           {statute ? <span className="font-medium">{statute}</span> : null}
           {statute && item.industry_labels.length > 0 ? <Dot /> : null}
           {item.industry_labels.join(' · ')}
@@ -133,19 +144,20 @@ export function RecordRow({ item }: { item: PublicContentSummary }) {
         </span>
         <Dot />
         <StatusSeal status={item.legal_status} label={item.status_label} />
+        {showDeadline ? <DeadlineMark days={deadline} /> : null}
+        {/* 좁은 화면에서는 여기까지. 아래는 훑을 때 필요 없는 것들이다. */}
         {statute ? (
-          <>
+          <span className="hidden items-center gap-2.5 sm:flex">
             <Dot />
-            <span>{statute}</span>
-          </>
+            {statute}
+          </span>
         ) : null}
         {item.industry_labels.map((name) => (
-          <span key={name} className="flex items-center gap-2.5">
+          <span key={name} className="hidden items-center gap-2.5 sm:flex">
             <Dot />
             {name}
           </span>
         ))}
-        {showDeadline ? <DeadlineMark days={deadline} /> : null}
       </p>
     </Link>
   );
