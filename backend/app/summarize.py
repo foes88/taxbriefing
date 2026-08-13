@@ -30,6 +30,7 @@ from app.domain.industry import is_internal_document
 from app.models.tables import ContentSource, ContentVersion, TaxContent
 from app.services.ai import runner
 from app.services.ai.contract import AnalysisOutput
+from app.services.ai.groq_provider import GroqDailyExhausted
 
 logger = get_logger(__name__)
 
@@ -172,6 +173,13 @@ def run(
             result = runner.run_analysis(
                 db, source_version_ids=source_ids, tax_content_id=content.id
             )
+        except GroqDailyExhausted as exc:
+            # **하루치를 다 썼으면 멈춘다.** 남은 건들을 계속 시도해 봐야
+            # 전부 같은 이유로 실패하고, 한 건당 재시도에 몇 분씩 버린다.
+            # 여기까지 한 것은 건별 커밋으로 이미 저장돼 있다.
+            print(f"\n{exc}")
+            print("여기까지 저장했습니다. 한도가 풀리면 같은 명령으로 이어집니다.")
+            break
         except Exception as exc:
             stats["실패"] += 1
             print(f"  ! {content.title[:36]}: {type(exc).__name__}: {exc}"[:150])

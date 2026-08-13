@@ -107,11 +107,60 @@ class GroqRateLimited(GroqError):
         self.retry_after = retry_after
 
 
+class GroqDailyExhausted(GroqError):
+    """하루치 토큰을 다 썼다. **기다려도 오늘은 안 풀린다.**
+
+    429 를 전부 분당 한도로 다뤘던 탓에 크게 헤맸다. 화면에는 이렇게 떴다.
+
+        ! 법인세법 (일부개정): GROQ 분당 한도를 계속 초과합니다.
+
+    그래서 호출이 너무 큰 줄 알고 원문을 자르는 쪽을 팠다. 실제 응답
+    본문은 다른 말을 하고 있었다.
+
+        on tokens per day (TPD): Limit 200000, Used 199862
+
+    분당이 아니라 **하루치**였다. 90초씩 세 번 기다린 뒤 실패하기를
+    아홉 번 반복했으니 40분을 아무 소득 없이 버린 셈이다.
+
+    한도의 종류가 다르면 대응도 다르다. 분당은 기다리고, 하루치는
+    멈춘다. 같은 429 라고 같이 다루면 안 된다.
+    """
+
+    def __init__(self, used: int | None = None, limit: int | None = None) -> None:
+        detail = f" ({used:,}/{limit:,} 토큰)" if used and limit else ""
+        super().__init__(
+            f"GROQ 하루치 토큰을 다 썼습니다{detail}. "
+            "기다려도 오늘은 풀리지 않습니다 — 내일 이어서 돌리세요."
+        )
+        self.used = used
+        self.limit = limit
+
+
 class GroqTooLarge(GroqError):
     """1회 요청이 너무 크다. 기다려도 소용없고 줄여야 한다."""
 
     def __init__(self) -> None:
         super().__init__("요청이 모델 한도보다 큽니다.")
+
+
+#: 하루치 한도를 알리는 429 본문.
+#:
+#:     on tokens per day (TPD): Limit 200000, Used 199862, Requested 1234
+_TPD = re.compile(
+    r"tokens per day \(TPD\).*?Limit\s+(\d+).*?Used\s+(\d+)", re.I | re.S
+)
+
+
+def _daily_exhausted(response: httpx.Response) -> GroqDailyExhausted | None:
+    """하루치를 다 쓴 429 인가.
+
+    분당 한도는 기다리면 풀리지만 이건 안 풀린다. 구분하지 않으면
+    되지도 않을 재시도에 한 건당 4분 30초를 버린다.
+    """
+    match = _TPD.search(response.text)
+    if not match:
+        return None
+    return GroqDailyExhausted(used=int(match.group(2)), limit=int(match.group(1)))
 
 
 def _retry_after(response: httpx.Response) -> float | None:
@@ -281,6 +330,10 @@ class GroqProvider:
                 client.close()
 
         if response.status_code == 429:
+            # 429 는 두 가지다. 본문이 어느 쪽인지 말해 준다.
+            daily = _daily_exhausted(response)
+            if daily is not None:
+                raise daily
             raise GroqRateLimited(_retry_after(response))
         if response.status_code == 413:
             raise GroqTooLarge()
