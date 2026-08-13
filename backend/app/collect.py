@@ -116,11 +116,17 @@ def main(argv: list[str] | None = None) -> int:
                 for key in ("discovered", "new", "changed", "unchanged", "errors"):
                     total[key] += getattr(stats, key)
 
+                # **출처마다 커밋한다.**
+                # 맨 끝에 한 번만 커밋했더니, 뒤쪽 출처에서 예외가 나면 앞에서
+                # 멀쩡히 수집한 것과 실행 기록까지 통째로 롤백됐다. 로그에는
+                # "조회 172 · 변경 1" 이 찍혀 있는데 DB 에는 아무것도 없는 상태가 된다.
+                # 외부 API 를 여러 개 도는 작업은 중간에 하나가 죽는다고 보고 짜야 한다.
+                if not args.dry_run:
+                    db.commit()
+
         if args.dry_run:
             db.rollback()
             print("\n[dry-run] 롤백했습니다.")
-        else:
-            db.commit()
     except Exception:
         db.rollback()
         raise

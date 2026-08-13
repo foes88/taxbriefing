@@ -48,12 +48,20 @@ def _string_list(body: dict, key: str) -> tuple[str, ...]:
 
 
 def collect_cards(
-    db: Session, *, since: dt.datetime, site_base: str, limit: int = 15
-) -> list[BriefingCard]:
-    """발송 대상 카드를 모은다.
+    db: Session, *, since: dt.datetime, site_base: str, limit: int = 6
+) -> tuple[list[BriefingCard], int]:
+    """발송 대상 카드와, 자리가 없어 빠진 건수를 돌려준다.
 
     **게시된 콘텐츠만** 담는다. 검수 전 초안이 텔레그램으로 나가면
     웹보다 먼저 잘못된 정보가 퍼지고, 메시지는 정정할 수도 없다.
+
+    **바뀐 것도 할 일도 없는 건은 보내지 않는다.**
+    수집 범위를 넓히니 "이번 훈령은 현행 내용이며 사업자에게 새로운 의무나
+    변경사항은 없습니다" 같은 요약이 알림으로 나갔다. 알림은 "당신이 뭔가
+    해야 한다"는 신호인데, 할 일이 없다고 적힌 것을 그 신호로 보내면
+    다음부터 알림 자체를 안 읽게 된다.
+
+    화면에는 그대로 남는다 — 찾아보러 온 사람에게는 "바뀐 게 없다"도 답이다.
     """
     rows = db.execute(
         select(TaxContent)
@@ -65,17 +73,23 @@ def collect_cards(
             # 텔레그램으로 보내면 숨긴 의미가 없다 — 오히려 알림으로 밀어넣는 셈이다.
             ~(TaxContent.search_text.is_not(None) & (TaxContent.industries == [])),
         )
+        # 중요도 → 최신 순. 자리가 모자라면 덜 중요한 것이 빠진다.
         .order_by(TaxContent.risk.desc(), TaxContent.updated_at.desc())
-        .limit(limit)
     ).scalars().all()
 
     cards: list[BriefingCard] = []
+
     for content in rows:
         body: dict = {}
         if content.current_version_id:
             version = db.get(ContentVersion, content.current_version_id)
             if version and isinstance(version.body, dict):
                 body = version.body
+
+        changes = _string_list(body, "changes")
+        actions = _string_list(body, "required_actions")
+        if not changes and not actions:
+            continue
 
         cards.append(
             BriefingCard(
@@ -84,21 +98,28 @@ def collect_cards(
                 risk_level=content.risk,
                 audience=_string_list(body, "affected_users"),
                 effective_date=content.effective_date,
-                key_points=_string_list(body, "changes")[:2]
+                key_points=changes[:2]
                 or ((content.one_line_summary,) if content.one_line_summary else ()),
-                actions=_string_list(body, "required_actions")[:2],
+                actions=actions[:2],
                 deadline=content.application_end,
                 detail_url=f"{site_base.rstrip('/')}/contents/{content.id}",
                 corrected=content.workflow is WorkflowStatus.CORRECTED,
             )
         )
-    return cards
+
+    # 자리가 모자라 빠진 것만 센다. 내용이 없어 걸러진 것은 "더 볼 게 있다"가
+    # 아니므로 안내에 넣지 않는다.
+    overflow = max(0, len(cards) - limit)
+    return cards[:limit], overflow
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="일일 세무 브리핑 텔레그램 발송")
     parser.add_argument("--hours", type=int, default=24, help="최근 N시간 게시분 (기본 24)")
-    parser.add_argument("--limit", type=int, default=15, help="최대 카드 수 (기본 15)")
+    # 기본 15 였는데 하루치가 24건 5,900자, 메시지 2개로 나갔다.
+    # 그 길이는 아무도 끝까지 읽지 않고, 안 읽는 알림은 다음부터 안 열린다.
+    # 중요한 것부터 여섯 건만 보내고 나머지는 사이트로 보낸다.
+    parser.add_argument("--limit", type=int, default=6, help="최대 카드 수 (기본 6)")
     parser.add_argument("--send", action="store_true", help="실제 전송 (기본은 미리보기)")
     parser.add_argument("--chat-id", help="수신 chat_id (기본: 환경변수)")
     parser.add_argument(
@@ -116,12 +137,14 @@ def main(argv: list[str] | None = None) -> int:
 
     db = SessionLocal()
     try:
-        cards = collect_cards(db, since=since, site_base=args.site, limit=args.limit)
+        cards, overflow = collect_cards(
+            db, since=since, site_base=args.site, limit=args.limit
+        )
     finally:
         db.close()
 
     today = now.astimezone(dt.timezone(dt.timedelta(hours=9))).date()
-    text = render_digest(cards, today=today, site_url=args.site)
+    text = render_digest(cards, today=today, site_url=args.site, overflow=overflow)
     chunks = split_for_telegram(text)
 
     print("=" * 60)

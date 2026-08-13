@@ -132,6 +132,7 @@ def render_digest(
     today: dt.date,
     site_url: str | None = None,
     header: str = "오늘의 세무 브리핑",
+    overflow: int = 0,
 ) -> str:
     """일일 브리핑 전체를 렌더링한다.
 
@@ -153,6 +154,12 @@ def render_digest(
     else:
         blocks = [render_card(card) for card in ordered]
         lines.append(("\n" + "─" * 20 + "\n").join(blocks))
+
+    # 자리가 없어 뺀 것이 있으면 **몇 건인지 밝힌다.**
+    # 조용히 자르면 사장님은 오늘 나온 게 이게 전부라고 믿는다.
+    if overflow > 0:
+        lines.append("")
+        lines.append(f"이 밖에 {overflow}건이 더 있습니다. 사이트에서 확인하세요.")
 
     if site_url:
         lines.append("")
