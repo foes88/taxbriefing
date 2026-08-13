@@ -31,8 +31,8 @@ function Segments({ segments, side }: { segments: DiffSegment[]; side: 'old' | '
             key={i}
             className={
               side === 'old'
-                ? 'bg-surface-sunk px-0.5 text-ink-3 line-through decoration-ink-3 decoration-1'
-                : 'bg-accent-soft px-0.5 font-bold text-ink'
+                ? 'rounded bg-surface-sunk px-1 text-ink-3 line-through decoration-ink-3 decoration-1'
+                : 'rounded bg-accent-weak px-1 font-bold text-accent-ink'
             }
           >
             {segment.text}
@@ -47,22 +47,20 @@ function Segments({ segments, side }: { segments: DiffSegment[]; side: 'old' | '
 
 function Row({ row, index }: { row: ComparisonBody['rows'][number]; index: number }) {
   return (
-    <li className="border-t border-rule first:border-t-0">
-      <div className="grid gap-0 sm:grid-cols-2">
-        <div className="border-b border-rule bg-surface-sunk px-5 py-4 sm:border-b-0 sm:border-r sm:px-6">
-          <p className="label">
-            변경 전 <span className="tabular ml-1 text-ink-3">#{index + 1}</span>
-          </p>
-          <p className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-ink-2">
-            <Segments segments={row.old} side="old" />
-          </p>
-        </div>
-        <div className="px-5 py-4 sm:px-6">
-          <p className="label">변경 후</p>
-          <p className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-ink">
-            <Segments segments={row.new} side="new" />
-          </p>
-        </div>
+    <li className="grid gap-3 rounded-field bg-surface-sunk p-4 sm:grid-cols-2">
+      <div className="min-w-0">
+        <p className="field-label">
+          변경 전 <span className="tabular ml-1">#{index + 1}</span>
+        </p>
+        <p className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-ink-3">
+          <Segments segments={row.old} side="old" />
+        </p>
+      </div>
+      <div className="min-w-0 border-t border-line pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+        <p className="field-label text-accent-ink">변경 후</p>
+        <p className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-ink">
+          <Segments segments={row.new} side="new" />
+        </p>
       </div>
     </li>
   );
@@ -79,10 +77,10 @@ export function Comparison({ comparison }: { comparison: ComparisonBody }) {
   const rest = rows.slice(OPEN_ROWS);
 
   return (
-    <section className="border-t border-rule">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-7 sm:px-8">
-        <h2 className="section-mark">조문 신구 대조</h2>
-        <p className="text-[13px] text-ink-3">
+    <section className="card pad">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 pb-3">
+        <h2 className="section-title">조문 신구 대조</h2>
+        <p className="text-meta text-ink-3">
           변경 조문 <span className="tabular font-semibold text-ink-2">{rows.length}개</span>
           {/*
             자른 것을 말없이 넘어가지 않는다. 40개만 보여주고 조용히 있으면
@@ -94,22 +92,22 @@ export function Comparison({ comparison }: { comparison: ComparisonBody }) {
         </p>
       </header>
 
-      <ul className="border-t border-rule">
+      <ul className="flex flex-col gap-2.5">
         {head.map((row, i) => (
           <Row key={row.no} row={row} index={i} />
         ))}
       </ul>
 
       {rest.length > 0 ? (
-        <details className="group border-t border-rule">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[14px] font-bold text-accent hover:bg-surface-sunk sm:px-8 [&::-webkit-details-marker]:hidden">
+        <details className="group mt-2.5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-field px-4 py-3 text-[14px] font-bold text-accent hover:bg-surface-sunk [&::-webkit-details-marker]:hidden">
             <span className="group-open:hidden">나머지 {rest.length}개 조문 보기</span>
             <span className="hidden group-open:inline">접기</span>
             <span aria-hidden className="text-ink-3 transition-transform group-open:rotate-180">
               ▾
             </span>
           </summary>
-          <ul className="border-t border-rule">
+          <ul className="mt-2.5 flex flex-col gap-2.5">
             {rest.map((row, i) => (
               <Row key={row.no} row={row} index={i + OPEN_ROWS} />
             ))}

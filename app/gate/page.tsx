@@ -33,8 +33,8 @@ export default async function GatePage({
         </div>
 
         {unset ? (
-          <div className="mb-4 border-l-2 border-seal bg-surface px-4 py-3">
-            <p className="text-[13px] font-bold text-seal">접근 비밀번호가 설정되지 않았습니다</p>
+          <div className="card mb-4 border-l-4 border-danger px-4 py-3">
+            <p className="text-[13.5px] font-bold text-danger">접근 비밀번호가 설정되지 않았습니다</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
               배포 환경의 환경변수에{' '}
               <code className="bg-surface-sunk px-1 py-0.5 font-mono text-[12px]">

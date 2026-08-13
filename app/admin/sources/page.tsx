@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { AuthorityTag } from '@/components/Seal';
+import { AuthorityTag } from '@/components/Authority';
 import { adminApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import type { SourceItem } from '@/lib/types';

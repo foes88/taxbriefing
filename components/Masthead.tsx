@@ -1,112 +1,76 @@
 import Link from 'next/link';
 
-import { Wordmark } from './Logo';
+import { Logo } from './Logo';
 
 /**
- * 제호와 탭을 하나의 짙은 밴드로 묶는다.
+ * 머리글과 메뉴.
  *
- * 흰 바탕만 이어지면 화면에 시작점이 없다. 앞선 시안은 제호도 탭도 흰
- * 바탕이라 스크롤하면 어디까지가 머리이고 어디부터가 내용인지 흐려졌다.
- * 밴드 하나로 그 경계를 만든다 — 페이지를 어둡게 하는 것과는 다른 얘기다.
+ * **메뉴를 자료 종류가 아니라 쓰는 순간으로 나눈다.**
  *
- * 탭이 이 안에 들어오는 이유: 정책과 뉴스는 **서로 다른 화면**이지
- * 한 화면의 필터가 아니다. 탐색 층위에 있어야 할 것이 내용 층위에 있으면
- * 스크롤할 때 같이 밀려 올라간다.
+ * 예전 탭은 「정책·법령 / 실무 TIP / 뉴스」였다. 그건 우리 서류함
+ * 분류지 세무사무소 직원이 일하는 순서가 아니다. 그래서 "왼쪽 메뉴가
+ * 너무 애매해" 라는 말이 나왔고, 실제로 애매했다 — 아침에 화면을 열면
+ * 세 탭을 다 눌러 봐야 오늘 뭐가 있는지 알 수 있었다.
+ *
+ * 쓰는 순간은 셋이다.
+ *
+ *   오늘  — 아침에 한 번. 지금 알아야 할 것.
+ *   일정  — 앞으로 닥치는 것. 미리 준비할 것.
+ *   찾기  — 상담 중에. "학원 4대보험" 하고 즉석에서.
+ *
+ * 심판례와 뉴스는 탭이 아니라 **찾기의 종류 칩**이 되고, 오늘 화면의
+ * 한 구획이 된다. 종류로 나눠 두면 종류를 알아야 찾을 수 있는데,
+ * 상담 중에는 그걸 모른 채 찾는다.
+ *
+ * 밴드는 걷어냈다. 짙은 남색 띠가 화면 맨 위를 20% 먹고 있었는데,
+ * 거기 담긴 정보는 서비스 이름 하나뿐이었다.
  */
-export function Masthead({
-  active,
-  compact = false,
-}: {
-  active?: 'policy' | 'tips' | 'news';
-  compact?: boolean;
-}) {
+const TABS = [
+  { href: '/', label: '오늘', key: 'today' },
+  { href: '/upcoming', label: '일정', key: 'schedule' },
+  { href: '/search', label: '찾기', key: 'search' },
+] as const;
+
+export type Tab = (typeof TABS)[number]['key'];
+
+export function Masthead({ active }: { active?: Tab }) {
   return (
-    <header className="bg-band text-white">
-      <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-4 py-3.5">
-        <Link href="/" className="flex items-center gap-3">
-          <Wordmark />
-          {!compact ? (
-            <span className="hidden border-l border-white/20 pl-3 text-[12.5px] font-medium text-white/60 sm:inline">
-              공식 원문으로 확인한 세무 브리핑
-            </span>
-          ) : null}
+    <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-md">
+      <div className="mx-auto flex max-w-page items-center gap-1 px-4 pt-3">
+        <Link href="/" className="flex shrink-0 items-center gap-2 pr-2 text-ink">
+          <Logo size={22} />
+          <span className="text-[17px] font-extrabold tracking-[-0.03em]">TaxBriefing</span>
         </Link>
 
         <Link
           href="/admin"
-          className="shrink-0 text-[12.5px] font-semibold text-white/60 transition-colors hover:text-white"
+          className="ml-auto shrink-0 px-2 text-meta font-semibold text-ink-3 transition-colors hover:text-ink"
         >
           관리자
         </Link>
       </div>
 
-      {/*
-        탭 세 개에 각각 부제가 붙어서 320px 짜리 화면에서는 마지막 탭이
-        잘렸다. 부제를 지우는 선택지는 없다 — "검수 완료" 와 "확인 전"
-        의 구분이 이 서비스에서 가장 중요한 표시다. 대신 옆으로 민다.
-      */}
       {active ? (
-        <nav
-          aria-label="구분"
-          className="mx-auto max-w-page overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <div className="flex w-max gap-1">
-            <Tab href="/" label="정책·법령" note="검수 완료" current={active === 'policy'} />
-            <Tab href="/tips" label="실무 TIP" note="심판례" current={active === 'tips'} />
-            <Tab href="/news" label="뉴스" note="확인 전" current={active === 'news'} unverified />
+        <nav aria-label="메뉴" className="mx-auto max-w-page px-2 pb-1 pt-1.5">
+          <div className="rail px-2">
+            {TABS.map((tab) => {
+              const on = tab.key === active;
+              return (
+                <Link
+                  key={tab.key}
+                  href={tab.href}
+                  aria-current={on ? 'page' : undefined}
+                  className={`shrink-0 rounded-full px-4 py-2 text-[15px] font-bold transition ${
+                    on ? 'bg-ink text-white' : 'text-ink-3 hover:bg-surface hover:text-ink-2'
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
           </div>
         </nav>
       ) : null}
     </header>
-  );
-}
-
-/**
- * 활성 탭은 아래 흰 화면과 이어 붙인다 — 탭이 그 화면의 손잡이라는 뜻이다.
- *
- * 두 탭의 성격이 다르므로 부제 색을 다르게 둔다. 정책은 검수를 거친 것이고
- * 뉴스는 아니다. 같은 색으로 칠하면 두 탭이 같은 무게로 읽히고,
- * 그게 이 서비스에서 가장 위험한 오해다.
- */
-function Tab({
-  href,
-  label,
-  note,
-  current,
-  unverified = false,
-}: {
-  href: string;
-  label: string;
-  note: string;
-  current: boolean;
-  unverified?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={current ? 'page' : undefined}
-      className={`flex items-baseline gap-2 rounded-t-[4px] px-3.5 pb-2.5 pt-2 transition-colors ${
-        current ? 'bg-paper' : 'hover:bg-white/10'
-      }`}
-    >
-      <span
-        className={`text-[14.5px] font-bold tracking-tight ${
-          current ? 'text-ink' : 'text-white/70'
-        }`}
-      >
-        {label}
-      </span>
-      <span
-        className={`text-[11.5px] font-semibold ${
-          current
-            ? unverified
-              ? 'text-state-pending'
-              : 'text-state-effective'
-            : 'text-white/40'
-        }`}
-      >
-        {note}
-      </span>
-    </Link>
   );
 }

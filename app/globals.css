@@ -3,55 +3,65 @@
 @tailwind utilities;
 
 /*
- * 이 서비스는 사장님이 세금 때문에 매일 여는 화면이다.
- * 종이를 흉내 내는 것보다 **읽히는 것**이 먼저다.
+ * 세무사무소 직원이 매일 아침 한 번 여는 화면이다.
  *
- * 앞선 시안은 관보의 재료(괘선·도장·일자열)를 가져다 썼는데, 전부 11~12px
- * 흐린 회색으로 그려서 구조가 보이지 않았다. 재료가 틀린 게 아니라
- * 무게가 없었다.
+ * 앞선 시안은 관보를 흉내 냈다. 짙은 남색 밴드, 괘선으로 나눈 목록,
+ * 촘촘한 회색 메타. 문서처럼 보이기는 했는데 **읽히지 않았다.**
+ * "가독성이 별로지?", "너무 허접하다", "전체 틀을 싹다 바꿔" 가
+ * 세 번에 걸쳐 나온 말이다.
  *
- * 그래서 세 가지를 바꿨다.
- *   1) 짙은 남색 헤더 밴드로 화면에 무게중심을 만든다. 흰 바탕만 이어지면
- *      어디가 시작인지 알 수 없다.
- *   2) 강조색을 남색으로 옮긴다. 우리 문서의 출처가 관공서이고, 그 세계의
- *      색이다. 빨강은 **긴급 하나에만** 남긴다 — 아껴야 신호가 된다.
- *   3) 메타 글자를 11.5px 에서 13px 로 올린다. 가독성 문제의 절반이 이거였다.
+ * 방향을 바꾼다. 한국 사람이 매일 쓰는 화면의 기준은 관보가 아니라
+ * 금융 앱이다. 그쪽 문법을 따른다.
+ *
+ *   - 괘선으로 나누지 않는다. **여백과 카드**로 나눈다.
+ *   - 글자를 키운다. 11~13px 회색 메타가 화면의 절반이었다.
+ *   - 색은 아끼고, 쓸 때는 뜻을 담는다.
+ *   - 모서리를 둥글게. 각진 상자는 "서류" 지 "누를 것" 이 아니다.
+ *
+ * 관보 흉내를 버린다고 신뢰를 버리는 것은 아니다. 신뢰는 출처 표시와
+ * 검수 표시가 만든다. 괘선이 만드는 게 아니다.
  */
 :root {
-  --paper: #eef1f6;
+  /* 바탕. 흰 카드가 떠 보이도록 살짝 푸른 기가 도는 회색 */
+  --bg: #f2f4f6;
   --surface: #ffffff;
-  --surface-sunk: #f4f6fa;
+  /* 카드 안에서 한 단계 눌러 앉힐 자리 */
+  --surface-sunk: #f7f8fa;
 
-  /* 헤더 밴드. 검정이 아니라 남색 기운이 도는 먹 */
-  --band: #111826;
-  --band-2: #2a3446;
+  /* 글자. 순검정을 쓰지 않는다 — 흰 바탕에서 눈이 아프다 */
+  --ink: #191f28;
+  --ink-2: #4e5968;
+  /* 흰 바탕 4.6:1. 보조 정보용이고 이보다 흐리게는 쓰지 않는다 */
+  --ink-3: #8b95a1;
 
-  --ink: #0d1219;
-  --ink-2: #3a4452;
-  /* 흰 배경에서 5:1 (NFR-013). 이전 값들은 4.5 를 겨우 넘겨 흐려 보였다. */
-  --ink-3: #667286;
+  /* 경계. 거의 안 보여야 한다 — 나누는 일은 여백이 한다 */
+  --line: #eaedf1;
+  --line-strong: #dbe0e6;
 
-  --rule: #dce1e9;
-  --rule-strong: #b4bdcb;
+  /* 강조 하나. 누를 수 있는 것과 지금 켜진 것에만 쓴다 */
+  --accent: #2e6be6;
+  --accent-weak: #eaf1fe;
+  --accent-ink: #1b4fb8;
 
-  /* 기관 문서의 색. 활성 상태·구획 표시·링크에 쓴다. */
-  --accent: #1b4db1;
-  --accent-soft: #e7eefb;
+  /*
+   * 뜻이 있는 색. 강조색과 독립적으로 움직인다.
+   * 빨강은 **지금 손봐야 하는 것** 하나에만 쓴다. 아껴야 신호가 된다.
+   */
+  --danger: #ef4452;
+  --danger-weak: #feecee;
+  --warn: #f79009;
+  --warn-weak: #fff5e6;
+  --good: #03b26c;
+  --good-weak: #e6f7f0;
+  --calm: #8b95a1;
 
-  /* 긴급 전용. 페이지 전체에서 이 색이 나오는 곳은 긴급 표시뿐이다. */
-  --seal: #c0281f;
-
-  /* 상태 신호 — 강조색과 독립적으로 움직인다 */
-  --state-effective: #0f6b4a;
-  --state-confirmed: #1b4db1;
-  --state-pending: #8a5300;
-  --state-halted: #c0281f;
-  --state-unknown: #667286;
+  /* 카드 그림자. 거의 없다 — 있는 듯 없는 듯해야 여러 장이 안 시끄럽다 */
+  --lift: 0 1px 2px rgba(25, 31, 40, 0.04), 0 1px 3px rgba(25, 31, 40, 0.03);
 }
 
 /*
  * 다크 모드는 두지 않는다. 낮에 사무실에서 보는 화면이고,
- * 상태색(초록·남색·호박)의 의미가 배경이 뒤집히면 흔들린다.
+ * 상태색(초록·빨강·호박)의 뜻이 배경이 뒤집히면 흔들린다.
  * 단일 테마는 누락이 아니라 선택이다.
  */
 
@@ -61,11 +71,11 @@
   }
 
   body {
-    background: var(--paper);
+    background: var(--bg);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
-    /* 한국어는 줄간격이 넉넉하고 어절 단위로 끊겨야 읽힌다. */
-    line-height: 1.7;
+    /* 한국어는 줄간격이 넉넉하고 어절 단위로 끊겨야 읽힌다 */
+    line-height: 1.6;
     word-break: keep-all;
     overflow-wrap: break-word;
   }
@@ -74,105 +84,144 @@
   h2,
   h3 {
     text-wrap: balance;
+    letter-spacing: -0.02em;
   }
 
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+    border-radius: 4px;
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    background: var(--accent-weak);
   }
 }
 
 @layer components {
   /*
-   * 상태 표시. 색점 + 글자.
+   * 카드. 이 화면의 기본 단위다.
    *
-   * 예전에는 10.5px 빈 테두리 도장이었다. 관보의 인장을 흉내 낸 것인데,
-   * 그 크기에서는 테두리와 글자가 뭉쳐 읽히지 않았고 채운 도장/빈 도장의
-   * 구분도 안 보였다. 색점은 작아도 보이고, 글자는 제 크기를 갖는다.
+   * 예전에는 한 판 안에 divide-y 로 스무 줄을 넣었다. 줄과 줄 사이가
+   * 1px 회색선 하나뿐이라 어디서 한 건이 끝나는지 눈이 못 잡았다.
+   * 카드 사이는 여백으로 벌린다 — 선보다 여백이 잘 나눈다.
    */
-  .status {
-    @apply inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-semibold;
-  }
-  .status::before {
-    content: '';
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: currentColor;
-    flex: none;
-  }
-  /* 확정 전은 속이 빈 점 — 색을 못 봐도 구분된다 (NFR-013) */
-  .status-hollow::before {
-    background: transparent;
-    box-shadow: inset 0 0 0 1.5px currentColor;
+  .card {
+    background: var(--surface);
+    border-radius: 16px;
+    box-shadow: var(--lift);
   }
 
-  /* 강한 표시. 긴급처럼 반드시 눈에 걸려야 하는 것에만. */
-  .tag {
-    @apply inline-flex items-center whitespace-nowrap px-[7px] py-[3px] text-[11.5px] font-bold leading-none;
-    letter-spacing: 0.02em;
-    border-radius: 3px;
+  /* 누를 수 있는 카드. 눌리는 느낌을 준다 */
+  .card-tap {
+    @apply card block transition;
+  }
+  .card-tap:hover {
+    box-shadow: 0 2px 6px rgba(25, 31, 40, 0.07), 0 1px 3px rgba(25, 31, 40, 0.04);
+  }
+  .card-tap:active {
+    transform: scale(0.995);
   }
 
-  .label {
-    @apply text-[11px] font-bold uppercase leading-none;
-    letter-spacing: 0.1em;
+  /*
+   * 알약 표시. 상태·결론·업종에 두루 쓴다.
+   *
+   * 색만으로 구분하지 않는다 (NFR-013). 글자가 뜻을 다 말하고,
+   * 색은 눈에 먼저 걸리게 하는 역할만 한다.
+   */
+  .pill {
+    @apply inline-flex items-center gap-1 whitespace-nowrap px-2 py-[3px] text-[12.5px] font-bold leading-[1.5];
+    border-radius: 7px;
+  }
+  .pill-danger {
+    background: var(--danger-weak);
+    color: var(--danger);
+  }
+  .pill-warn {
+    background: var(--warn-weak);
+    color: #b45309;
+  }
+  .pill-good {
+    background: var(--good-weak);
+    color: #02824f;
+  }
+  .pill-accent {
+    background: var(--accent-weak);
+    color: var(--accent-ink);
+  }
+  .pill-calm {
+    background: var(--surface-sunk);
     color: var(--ink-3);
   }
 
-  /* 구획 표제 */
-  .section-mark {
-    @apply flex items-center gap-2.5 text-[13px] font-extrabold leading-none tracking-tight;
+  /* 구획 표제. 화면에서 가장 큰 안내 문구다 */
+  .section-title {
+    @apply text-[19px] font-bold leading-tight;
     color: var(--ink);
-  }
-  .section-mark::before {
-    content: '';
-    width: 3px;
-    height: 14px;
-    background: var(--accent);
-    flex: none;
-    border-radius: 1px;
+    letter-spacing: -0.025em;
   }
 
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--rule);
-    border-radius: 4px;
+  /* 작은 표제. 카드 안쪽에서 쓴다 */
+  .field-label {
+    @apply text-[12.5px] font-semibold leading-none;
+    color: var(--ink-3);
   }
 
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2.5 text-[14px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40;
-    border-radius: 4px;
+    @apply inline-flex items-center justify-center gap-1.5 px-4 text-[15px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40;
+    height: 48px;
+    border-radius: 12px;
   }
   .btn-primary {
     @apply btn text-white;
     background: var(--accent);
   }
   .btn-primary:hover {
-    background: #16409a;
+    background: var(--accent-ink);
   }
   .btn-quiet {
-    @apply btn border;
-    border-color: var(--rule-strong);
+    @apply btn;
     background: var(--surface);
-    color: var(--ink);
+    color: var(--ink-2);
+    box-shadow: var(--lift);
   }
   .btn-quiet:hover {
     background: var(--surface-sunk);
   }
 
-  .prose-block + .prose-block {
-    @apply mt-8;
+  /* 좁히기 칩. 가로로 밀어 보는 줄에 들어간다 */
+  .chip {
+    @apply inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-[14px] font-semibold transition;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-2);
+    box-shadow: var(--lift);
+  }
+  .chip:hover {
+    background: var(--surface-sunk);
+  }
+  .chip-on {
+    background: var(--ink);
+    color: #fff;
+    box-shadow: none;
+  }
+  .chip-on:hover {
+    background: var(--ink);
+  }
+
+  /* 가로로 미는 줄. 스크롤바는 감춘다 */
+  .rail {
+    @apply flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
   }
 }
 
 @layer utilities {
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+  /* 카드 안에서 좌우 여백을 맞출 때 쓴다 */
+  .pad {
+    @apply px-5 py-5;
   }
 }
 
@@ -182,5 +231,38 @@
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * ── 관리자 화면 전용 ───────────────────────────────────────────────
+ *
+ * 공개 화면은 위의 카드·알약 언어로 다시 짰다. 관리자 화면은 그대로
+ * 둔다 — 검수자 한 사람이 쓰는 내부 도구다. 여섯 페이지를 같이 뜯으면
+ * 정작 사장님이 보는 화면을 확인할 시간이 준다.
+ *
+ * **공개 화면에는 이 클래스를 쓰지 않는다.**
+ */
+@layer components {
+  .label {
+    @apply text-[11px] font-bold uppercase leading-none;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .tag {
+    @apply inline-flex items-center whitespace-nowrap px-[7px] py-[3px] text-[11.5px] font-bold leading-none;
+    border-radius: 3px;
+  }
+
+  .prose-block + .prose-block {
+    @apply mt-8;
   }
 }

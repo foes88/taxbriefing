@@ -2,7 +2,6 @@ import type { Config } from 'tailwindcss';
 
 /**
  * 색·간격은 globals.css 의 토큰이 정본이다. 여기서는 이름만 연결한다.
- * 다크 모드까지 토큰 한 곳에서 뒤집히므로 컴포넌트는 테마를 몰라도 된다.
  */
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
@@ -21,71 +20,94 @@ const config: Config = {
         ],
       },
       colors: {
-        paper: 'var(--paper)',
+        bg: 'var(--bg)',
         surface: {
           DEFAULT: 'var(--surface)',
           sunk: 'var(--surface-sunk)',
-        },
-        band: {
-          DEFAULT: 'var(--band)',
-          2: 'var(--band-2)',
         },
         ink: {
           DEFAULT: 'var(--ink)',
           2: 'var(--ink-2)',
           3: 'var(--ink-3)',
         },
-        rule: {
-          DEFAULT: 'var(--rule)',
-          strong: 'var(--rule-strong)',
+        line: {
+          DEFAULT: 'var(--line)',
+          strong: 'var(--line-strong)',
         },
         accent: {
           DEFAULT: 'var(--accent)',
-          soft: 'var(--accent-soft)',
+          weak: 'var(--accent-weak)',
+          ink: 'var(--accent-ink)',
         },
-        seal: 'var(--seal)',
+        danger: {
+          DEFAULT: 'var(--danger)',
+          weak: 'var(--danger-weak)',
+        },
+        warn: {
+          DEFAULT: 'var(--warn)',
+          weak: 'var(--warn-weak)',
+        },
+        good: {
+          DEFAULT: 'var(--good)',
+          weak: 'var(--good-weak)',
+        },
+
+        /*
+         * 관리자 화면 전용 별칭.
+         *
+         * 공개 화면은 위 이름으로 다시 짰지만 관리자 화면은 그대로 둔다 —
+         * 검수자 한 사람이 쓰는 내부 도구라 손볼 이유가 없고, 여섯 페이지를
+         * 같이 뜯으면 정작 사장님이 보는 화면을 확인할 시간이 준다.
+         *
+         * **공개 화면에는 쓰지 않는다.** 새 이름(line·bg·danger)을 쓴다.
+         */
+        rule: {
+          DEFAULT: 'var(--line)',
+          strong: 'var(--line-strong)',
+        },
+        paper: 'var(--bg)',
+        seal: 'var(--danger)',
+        band: {
+          DEFAULT: '#191f28',
+          2: '#4e5968',
+        },
         state: {
-          effective: 'var(--state-effective)',
-          confirmed: 'var(--state-confirmed)',
-          pending: 'var(--state-pending)',
-          halted: 'var(--state-halted)',
-          unknown: 'var(--state-unknown)',
+          effective: 'var(--good)',
+          confirmed: 'var(--accent)',
+          pending: '#b45309',
+          halted: 'var(--danger)',
+          unknown: 'var(--ink-3)',
         },
       },
       /*
-       * 큰 글자는 화면 폭을 따라간다.
+       * 큰 글자는 화면 폭을 따라간다. 36px 로 고정해 뒀더니 360px 짜리
+       * 휴대폰에서 제목 한 줄이 다섯 줄로 흘렀다.
        *
-       * 36px 로 고정해 뒀더니 360px 짜리 휴대폰에서 제목 한 줄이
-       * "2026년 7월 1일부터 학원 사업장의 4대보험 가입 기준이 바뀝니다"
-       * 다섯 줄로 흘렀다. 데스크톱에서 존재감을 주던 크기가 휴대폰에서는
-       * 그냥 화면을 다 먹는다.
-       *
-       * 작은 글자(record 18px, 본문 16px)는 고정한다. 그 아래로 줄이면
-       * 읽기 힘들어지지, 공간이 절약되지 않는다.
+       * 작은 글자는 고정하고, **바닥을 올렸다.** 예전 화면은 11~13px
+       * 회색 메타가 절반이었다. 그게 "가독성이 별로" 의 실체였다.
        */
       fontSize: {
         display: [
-          'clamp(1.625rem, 5.4vw, 2.25rem)',
-          { lineHeight: '1.24', letterSpacing: '-0.028em', fontWeight: '800' },
+          'clamp(1.5rem, 4.6vw, 1.875rem)',
+          { lineHeight: '1.3', letterSpacing: '-0.03em', fontWeight: '700' },
         ],
-        headline: [
-          'clamp(1.1875rem, 3.4vw, 1.375rem)',
-          { lineHeight: '1.4', letterSpacing: '-0.018em', fontWeight: '700' },
-        ],
-        /** 목록 제목. 훑을 때 가장 먼저 읽히는 크기다. */
-        record: ['1.125rem', { lineHeight: '1.44', letterSpacing: '-0.014em', fontWeight: '700' }],
+        /** 카드 제목. 목록에서 가장 먼저 읽히는 크기 */
+        card: ['1.0625rem', { lineHeight: '1.47', letterSpacing: '-0.02em', fontWeight: '700' }],
+        /** 본문 */
+        body: ['0.9375rem', { lineHeight: '1.65', letterSpacing: '-0.01em' }],
+        /** 보조 정보. 이 아래로는 쓰지 않는다 */
+        meta: ['0.8125rem', { lineHeight: '1.5', letterSpacing: '-0.005em' }],
       },
       maxWidth: {
-        /** 페이지 골격. 데스크톱에서 양옆이 비지 않을 만큼 넓다. */
-        page: '78rem',
-        /**
-         * 본문 measure. 한국어는 이 폭을 넘으면 줄 끝에서 눈이 길을 잃는다.
-         * 뉴스 탭은 사이드바가 없어 요약이 1200px 를 가로질렀다 — 한 줄에
-         * 120자가 넘었고, 그게 "가독성이 떨어진다"의 실체였다.
-         */
-        reading: '42rem',
+        /** 화면 골격. 예전 78rem 은 데스크톱에서 한 줄이 너무 길었다 */
+        page: '66rem',
+        /** 본문 measure. 한국어는 이 폭을 넘으면 줄 끝에서 눈이 길을 잃는다 */
+        reading: '40rem',
       },
       borderRadius: {
+        card: '16px',
+        field: '12px',
+        /* 관리자 화면 전용 */
         sharp: '2px',
         soft: '3px',
       },

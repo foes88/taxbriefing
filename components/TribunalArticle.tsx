@@ -28,23 +28,13 @@ import type { PublicContentDetail, TribunalBody } from '@/lib/types';
  * 그리고 괄호에 그게 무슨 뜻인지 적는다 — "일부인용"이 납세자가 일부
  * 이겼다는 뜻임을 모두가 아는 것은 아니다.
  */
-const OUTCOME: Record<string, { tone: string; hollow: boolean; gloss: string }> = {
-  인용: { tone: 'text-state-effective', hollow: false, gloss: '납세자 주장이 받아들여짐' },
-  일부인용: { tone: 'text-state-effective', hollow: true, gloss: '일부만 받아들여짐' },
-  기각: { tone: 'text-state-halted', hollow: true, gloss: '납세자 주장이 받아들여지지 않음' },
-  각하: { tone: 'text-ink-3', hollow: true, gloss: '본안 판단 없이 종료' },
-  재조사: { tone: 'text-state-pending', hollow: true, gloss: '과세관청이 다시 조사' },
+const OUTCOME: Record<string, { pill: string; gloss: string }> = {
+  인용: { pill: 'pill-good', gloss: '납세자 주장이 받아들여짐' },
+  일부인용: { pill: 'pill-good', gloss: '일부만 받아들여짐' },
+  기각: { pill: 'pill-calm', gloss: '납세자 주장이 받아들여지지 않음' },
+  각하: { pill: 'pill-calm', gloss: '본안 판단 없이 종료' },
+  재조사: { pill: 'pill-warn', gloss: '과세관청이 다시 조사' },
 };
-
-export function OutcomeMark({ outcome }: { outcome: string }) {
-  const spec = OUTCOME[outcome];
-  if (!spec) return null;
-  return (
-    <span className={`status ${spec.hollow ? 'status-hollow' : ''} ${spec.tone}`}>
-      청구 {outcome}
-    </span>
-  );
-}
 
 const ORDINALS = '가나다라마바사아자차카타파하';
 
@@ -161,9 +151,9 @@ function Section({ label, text }: { label: string; text: string }) {
 
   if (text.length <= FOLD_OVER) {
     return (
-      <section className="prose-block">
-        <h2 className="section-mark">{label}</h2>
-        <p className="mt-3 whitespace-pre-wrap text-[16px] leading-loose text-ink-2">{shaped}</p>
+      <section className="card pad">
+        <h2 className="section-title">{label}</h2>
+        <p className="mt-3 whitespace-pre-wrap text-[15.5px] leading-loose text-ink-2">{shaped}</p>
       </section>
     );
   }
@@ -177,11 +167,12 @@ function Section({ label, text }: { label: string; text: string }) {
     내용까지 찾아 준다 (요즘 브라우저는 hidden=until-found 로 열어 준다).
   */
   return (
-    <details className="group prose-block border-t border-rule pt-5">
+    <details className="group card pad">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-        <span className="section-mark">{label}</span>
-        <span className="tabular shrink-0 text-[13px] font-semibold text-accent">
-          전문 {text.length.toLocaleString('ko-KR')}자 <span className="group-open:hidden">펼치기</span>
+        <span className="section-title">{label}</span>
+        <span className="tabular shrink-0 text-meta font-bold text-accent">
+          {text.length.toLocaleString('ko-KR')}자{' '}
+          <span className="group-open:hidden">펼치기</span>
           <span className="hidden group-open:inline">접기</span>
         </span>
       </summary>
@@ -212,11 +203,13 @@ export function TribunalArticle({
     : content.title;
 
   return (
-    <article className="min-w-0 border border-rule bg-surface">
-      <header className="border-b border-rule px-5 py-7 sm:px-8">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[13px] font-bold text-accent">조세심판원 결정</span>
-          <OutcomeMark outcome={tribunal.outcome} />
+    <article className="flex flex-col gap-3">
+      <div className="card pad">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="pill pill-accent">조세심판원</span>
+          {tribunal.outcome ? (
+            <span className={`pill ${spec?.pill ?? 'pill-calm'}`}>청구 {tribunal.outcome}</span>
+          ) : null}
         </div>
 
         {/*
@@ -227,12 +220,11 @@ export function TribunalArticle({
           이걸 법령 제목과 같은 크기로 놓으면 휴대폰에서 일곱 줄이 되고
           화면 하나를 통째로 먹는다. 한 단계 낮춘다.
         */}
-        <h1 className="mt-3.5 max-w-reading text-headline text-ink">{title}</h1>
+        <h1 className="mt-3 max-w-reading text-[19px] font-bold leading-snug text-ink">{title}</h1>
 
-        {spec ? (
-          <p className="mt-3 text-[14px] font-medium text-ink-3">{spec.gloss}</p>
-        ) : null}
-      </header>
+        {spec ? <p className="mt-2 text-meta font-semibold text-ink-3">{spec.gloss}</p> : null}
+
+        <div className="mt-4">
 
       {/*
         세목과 처분청은 "이게 우리 업체와 비슷한 상황인가"를 가르는 첫
@@ -242,8 +234,8 @@ export function TribunalArticle({
         의결일 자리에는 오늘 날짜를 찍었다. 3주 전 결정이 오늘 나온 것처럼
         보였다. 모르면 칸을 빼는 게 맞다.
       */}
-      <FactGrid
-        cells={[
+          <FactGrid
+            cells={[
           { label: '세목', value: tribunal.tax_type },
           { label: '결론', value: tribunal.outcome ? `청구 ${tribunal.outcome}` : null },
           { label: '처분청', value: tribunal.disposition_agency },
@@ -251,10 +243,12 @@ export function TribunalArticle({
             label: '의결일',
             value: content.promulgation_date ? formatDate(content.promulgation_date) : null,
           },
-        ]}
-      />
+          ]}
+          />
+        </div>
+      </div>
 
-      <div className="max-w-reading px-5 py-7 sm:px-8">
+      <div className="flex flex-col gap-3">
         {/*
           원문을 그대로 쓴다. 요약하지 않는다 — 실무자는 이 문장을 근거로
           인용하고, 우리가 다시 쓴 문장은 인용할 수 없다.
@@ -264,12 +258,12 @@ export function TribunalArticle({
             <Section key={section.label} label={section.label} text={section.text} />
           ))
         ) : (
-          <p className="text-[15px] leading-relaxed text-ink-2">
-            본문을 불러오지 못했습니다. 아래 공식 원문을 확인해 주세요.
+          <p className="card pad text-body text-ink-2">
+            본문을 불러오지 못했습니다. 옆의 공식 원문을 확인해 주세요.
           </p>
         )}
 
-        <p className="mt-9 border-t border-rule pt-4 text-[13.5px] leading-relaxed text-ink-3">
+        <p className="px-2 text-meta leading-relaxed text-ink-3">
           개별 사건의 사실관계에 대한 판단입니다. 사실관계가 다르면 결론도 달라지므로 우리
           사업장에 그대로 적용된다고 볼 수 없습니다.
         </p>
