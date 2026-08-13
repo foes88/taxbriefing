@@ -30,6 +30,7 @@ from app.services.collectors.law_go_kr import (
 )
 from app.services.collectors.naver_news import NaverNewsCollector
 from app.services.collectors.rss import RssCollector
+from app.services.collectors.tribunal import TaxTribunalCollector
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,7 @@ ADAPTERS = {
     # 현행법 → 행정규칙 → 시행예정 순. 시행예정을 마지막에 두는 이유는 없다 —
     # 별개 canonical_url 을 쓰므로 서로 덮어쓰지 않는다.
     "law.go.kr": (LawCollector, AdmRulCollector, UpcomingLawCollector),
+    "law.go.kr/조세심판원": (TaxTribunalCollector,),
     "openapi.naver.com": (NaverNewsCollector,),
 }
 
