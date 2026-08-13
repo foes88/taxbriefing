@@ -160,3 +160,50 @@ class TestStatusByKind:
         self.publish(db, make_source, make_raw_version, kind=ContentKind.POLICY)
 
         assert self._item(client, ContentKind.POLICY)["status_label"] is not None
+
+
+@requires_db
+class TestBulkDraftIdempotency:
+    """같은 원문에서 콘텐츠가 두 번 만들어지면 안 된다.
+
+    처음에는 **제목**으로 걸렀다. 국회 의안은 여러 의원이 각자 같은
+    이름으로 발의해서 서로 다른 40개 법안이 11개로 뭉쳤다.
+
+    그래서 **원문 버전**으로 바꿨더니 이번엔 반대로 하나가 둘이 됐다.
+    법제처가 같은 법령을 다시 내려주며 본문이 조금 달라지면 새 버전이
+    생기는데, 그때마다 콘텐츠가 하나 더 만들어졌다. 56묶음 57건이었다.
+
+    원문 하나가 콘텐츠 하나다. 그게 실제 관계다.
+    """
+
+    def test_new_version_of_same_raw_does_not_create_a_second_content(
+        self, db, make_source, make_raw_version
+    ):
+        import datetime as dt
+
+        from app import bulk_draft
+        from app.models.tables import RawContent
+
+        source = make_source(AuthorityGrade.A)
+        url = "https://www.law.go.kr/법령/소득세법 시행규칙"
+        first = make_raw_version(source, url=url)
+        raw = db.get(RawContent, first.raw_content_id)
+        raw.published_at = dt.datetime(2026, 7, 1, tzinfo=dt.UTC)
+        db.flush()
+
+        stats = bulk_draft.run(
+            db, months=None, year=None, limit=10, auto_approve=False,
+            today=dt.date(2026, 8, 13),
+        )
+        assert stats["초안"] == 1
+
+        # 같은 주소 = 같은 원문. 본문만 달라졌으니 새 버전이 생긴다.
+        second = make_raw_version(source, url=url, body="본문이 조금 달라졌다")
+        assert second.raw_content_id == raw.id
+        assert second.id != first.id
+
+        again = bulk_draft.run(
+            db, months=None, year=None, limit=10, auto_approve=False,
+            today=dt.date(2026, 8, 13),
+        )
+        assert again["초안"] == 0, "같은 원문에서 콘텐츠가 또 만들어졌다"

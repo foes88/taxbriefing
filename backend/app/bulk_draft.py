@@ -289,10 +289,25 @@ def run(
         # 여러 의원이 각자 "조세특례제한법 일부개정법률안" 을 발의하기 때문이다.
         # 제목 기준으로 걸렀더니 서로 다른 40개 법안이 11개로 뭉쳤다.
         #
-        # 원문 버전 하나가 콘텐츠 하나다. 그게 실제 관계다.
+        # **버전이 아니라 원문으로 판정한다.**
+        # 버전 기준으로 걸렀더니 이번에는 반대로 하나가 둘이 됐다.
+        # 법제처가 같은 법령을 다시 내려주면서 본문이 조금 달라지면
+        # 새 버전이 생기는데, 그때마다 콘텐츠가 하나 더 만들어졌다.
+        #
+        #     소득세법 시행규칙 (일부개정)   08-06 생성
+        #     소득세법 시행규칙 (일부개정)   08-13 생성   ← 같은 원문의 새 버전
+        #
+        # 화면에 같은 카드가 두 번 떴다. 32건이 그랬다.
+        #
+        # 원문 하나가 콘텐츠 하나다. 시행예정본은 수집기가 URL 을 따로
+        # 두므로 원문 자체가 갈리고, 그래서 현행본과 나란히 남는다.
         exists = db.execute(
             select(ContentSource.tax_content_id)
-            .where(ContentSource.raw_content_version_id == version.id)
+            .join(
+                RawContentVersion,
+                ContentSource.raw_content_version_id == RawContentVersion.id,
+            )
+            .where(RawContentVersion.raw_content_id == raw.id)
             .limit(1)
         ).scalar_one_or_none()
         if exists is not None:
