@@ -47,7 +47,15 @@ const TONE_TEXT: Record<Tone, string> = {
   unknown: 'text-state-unknown',
 };
 
-export function StatusSeal({ status, label }: { status: LegalStatus; label: string }) {
+/**
+ * 정책 상태 표시.
+ *
+ * 라벨이 없으면 아무것도 그리지 않는다. 심판례·해석례가 그렇다 —
+ * 제도가 아니라 이미 끝난 한 건의 판단이라 진행 상태가 없다.
+ * 서버가 null 로 내려주므로 화면은 종류를 몰라도 된다.
+ */
+export function StatusSeal({ status, label }: { status: LegalStatus; label: string | null }) {
+  if (!label) return null;
   const tone = STATUS_TONE[status];
   return (
     <span className={`status ${FILLED[tone] ? '' : 'status-hollow'} ${TONE_TEXT[tone]}`}>

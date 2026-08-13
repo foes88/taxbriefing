@@ -33,8 +33,15 @@ export interface PublicContentSummary {
   title: string;
   one_line_summary: string | null;
   legal_status: LegalStatus;
-  /** 서버가 확정한 표시 라벨. 프론트에서 다시 만들지 않는다 (§10.4). */
-  status_label: string;
+  /**
+   * 서버가 확정한 표시 라벨. 프론트에서 다시 만들지 않는다 (§10.4).
+   *
+   * **심판례·해석례는 null 이다.** 제도가 아니라 이미 끝난 한 건의
+   * 판단이라 진행 상태라는 것이 없다. 예전에는 "상태 확인 필요 ·
+   * 확정 아님" 이 붙어서, 확인할 것도 없는 확정된 결정문이 못 미더운
+   * 것처럼 보였다.
+   */
+  status_label: string | null;
   /** "시행 확정 아님" 같은 경고. null 이면 경고 없음. */
   status_caveat: string | null;
   is_confirmed: boolean;

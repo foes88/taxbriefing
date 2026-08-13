@@ -96,3 +96,67 @@ class TestOutcomeFilter:
         body = client.get("/api/v1/public/feed?content_kind=TRIBUNAL&outcome=승소").json()
 
         assert body["total"] == 0
+
+
+@requires_db
+class TestStatusByKind:
+    """정책 상태는 종류를 가려서 붙인다.
+
+    심판례에 "상태 확인 필요 · 확정 아님" 이 붙어 있었다. 확인이 필요한
+    게 아니라 확인할 것이 없고, 확정이 아닌 게 아니라 이미 확정된
+    결정이다. 세 줄 다 틀렸다.
+    """
+
+    @pytest.fixture
+    def client(self, db):
+        from app.core.db import get_db
+        from app.main import app
+
+        def _override():
+            yield db
+
+        app.dependency_overrides[get_db] = _override
+        with TestClient(app) as c:
+            yield c
+        app.dependency_overrides.clear()
+
+    def publish(self, db, make_source, make_raw_version, *, kind):
+        version = make_raw_version(make_source(AuthorityGrade.A))
+        content = content_service.create_content(
+            db, title=f"{kind.value} 건", source_version_ids=[version.id]
+        )
+        content.workflow = WorkflowStatus.PUBLISHED
+        content.content_kind = kind.value
+        db.flush()
+        return content
+
+    def _item(self, client, kind):
+        body = client.get(f"/api/v1/public/feed?content_kind={kind.value}").json()
+        return body["items"][0]
+
+    def test_tribunal_has_no_policy_status(self, client, db, make_source, make_raw_version):
+        self.publish(db, make_source, make_raw_version, kind=ContentKind.TRIBUNAL)
+
+        item = self._item(client, ContentKind.TRIBUNAL)
+
+        assert item["status_label"] is None
+        assert item["status_caveat"] is None
+        assert item["is_confirmed"] is False
+
+    def test_interpretation_has_no_policy_status(
+        self, client, db, make_source, make_raw_version
+    ):
+        self.publish(db, make_source, make_raw_version, kind=ContentKind.INTERPRETATION)
+
+        assert self._item(client, ContentKind.INTERPRETATION)["status_label"] is None
+
+    def test_bill_keeps_its_status(self, client, db, make_source, make_raw_version):
+        """법안에는 발의·통과라는 진행이 실제로 있다. 여기까지 지우면 안 된다."""
+        self.publish(db, make_source, make_raw_version, kind=ContentKind.BILL)
+
+        assert self._item(client, ContentKind.BILL)["status_label"] is not None
+
+    def test_policy_keeps_its_status(self, client, db, make_source, make_raw_version):
+        self.publish(db, make_source, make_raw_version, kind=ContentKind.POLICY)
+
+        assert self._item(client, ContentKind.POLICY)["status_label"] is not None

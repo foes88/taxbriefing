@@ -61,7 +61,9 @@ class PublicContentSummary(BaseModel):
     title: str
     one_line_summary: str | None = None
     legal_status: LegalStatus
-    status_label: str
+    #: 서버가 확정한 표시 라벨. 프론트에서 다시 만들지 않는다 (§10.4).
+    #: 심판례·해석례는 None — 정책 상태라는 것이 없다.
+    status_label: str | None = None
     status_caveat: str | None = None
     is_confirmed: bool
     risk_level: RiskLevel
@@ -156,6 +158,23 @@ class MonthBucket(BaseModel):
     """HIGH·CRITICAL 건수. 그 달을 열어볼지 판단하는 신호다."""
 
 
+#: 정책 진행 상태를 갖는 종류.
+#:
+#: 심판례와 해석례는 제도가 아니라 **이미 끝난 한 건의 판단**이다.
+#: 진행 단계라는 것이 없는데도 상태를 붙였더니 API 가 이렇게 내려갔다.
+#:
+#:     legal_status  UNKNOWN
+#:     status_label  "상태 확인 필요"
+#:     status_caveat "확정 아님"
+#:
+#: 세 줄 다 틀렸다. 확인이 필요한 게 아니라 확인할 것이 없고, 확정이
+#: 아닌 게 아니라 이미 확정된 결정이다. 법안(BILL)은 다르다 —
+#: 발의·통과라는 진행이 실제로 있다.
+KINDS_WITH_STATUS = frozenset(
+    {ContentKind.POLICY.value, ContentKind.BILL.value, ContentKind.SUPPORT.value}
+)
+
+
 def _actionable(body: dict | None) -> bool:
     """달라지는 것이나 할 일이 하나라도 있는가.
 
@@ -171,14 +190,17 @@ def _actionable(body: dict | None) -> bool:
 
 
 def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSummary:
+    has_status = content.content_kind in KINDS_WITH_STATUS
     return PublicContentSummary(
         id=content.id,
         title=content.title,
         one_line_summary=content.one_line_summary,
         legal_status=content.legal,
-        status_label=STATUS_LABEL[content.legal],
-        status_caveat=caveat_for(content.legal, content.effective_date),
-        is_confirmed=content.legal.is_confirmed,
+        status_label=STATUS_LABEL[content.legal] if has_status else None,
+        status_caveat=caveat_for(content.legal, content.effective_date) if has_status else None,
+        # 심판례를 "확정 아님" 으로 두면 결정문을 못 믿을 것으로 읽힌다.
+        # 확정 여부를 따질 대상이 아니므로 판단하지 않는다.
+        is_confirmed=content.legal.is_confirmed if has_status else False,
         risk_level=content.risk,
         effective_date=content.effective_date,
         promulgation_date=content.promulgation_date,

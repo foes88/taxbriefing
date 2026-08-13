@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
+from app.domain.enums import ContentKind
 from app.domain.industry import is_internal_document
 from app.models.tables import ContentSource, ContentVersion, TaxContent
 from app.services.ai import runner
@@ -85,6 +86,13 @@ def _already_summarized(body: dict) -> bool:
     return body.get("_ai") is True
 
 
+#: AI 요약을 돌리지 않는 종류.
+#:
+#: 심판례와 해석례는 원문이 이미 [청구인 주장] / [판단 요지] / [판단 이유]
+#: 로 갈려 있다. 모델이 다시 쓸 것이 없고, 다시 쓰면 화자가 바뀐다.
+KINDS_WITHOUT_AI = frozenset({ContentKind.TRIBUNAL.value, ContentKind.INTERPRETATION.value})
+
+
 def run(
     db: Session,
     *,
@@ -108,6 +116,24 @@ def run(
         # "국세청 인사관리규정" 을 사장님용 문장으로 옮겨 봐야 아무도 안 보고,
         # 무료 티어의 분당 토큰은 정작 필요한 개정에서 모자란다.
         if not force and is_internal_document(content.title):
+            stats["건너뜀"] += 1
+            continue
+
+        # **심판례·해석례는 요약하지 않는다.** --force 로도 하지 않는다.
+        #
+        # 원문에 이미 쟁점과 판단이 갈려 있어 모델을 쓸 자리가 아니고,
+        # 무엇보다 말이 뒤집힌다. 실제로 두 건이 이렇게 요약됐다.
+        #
+        #     사업자는 해당 부가가치세·가산세를 계속 부담해야 합니다.
+        #
+        # 그 청구법인 얘기지 우리 고객 얘기가 아니다. 남의 사건 판단을
+        # 읽는 사람의 의무처럼 쓰면, 사장님이 안 내도 될 세금을 냈다고
+        # 생각하거나 상담이 엉뚱한 데서 시작된다.
+        #
+        # 덤으로 검색도 깨진다. AI 출력이 생기면 build_search_text 가
+        # 원문 대신 그 짧은 요약을 쓰고, 심판례 본문의 쟁점 단어가
+        # 검색에서 사라진다.
+        if content.content_kind in KINDS_WITHOUT_AI:
             stats["건너뜀"] += 1
             continue
 
