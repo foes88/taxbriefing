@@ -49,6 +49,13 @@ export interface PublicContentSummary {
   industries: string[];
   /** 화면용 업종 이름. 서버가 만든다 — 프론트에 분류표를 복사해두지 않는다. */
   industry_labels: string[];
+  /**
+   * 달라지는 것이나 할 일이 하나라도 있는가. "먼저 볼 것" 선정에 쓴다.
+   *
+   * 선택 필드다 — 이 값을 내려주지 않는 예전 API 와도 동작해야 한다.
+   * 없으면 "모른다"이지 "아니다"가 아니다.
+   */
+  actionable?: boolean;
 }
 
 export interface PublicSource {

@@ -27,8 +27,25 @@ function pick(params: Record<string, string | string[] | undefined>, key: string
   return Array.isArray(value) ? value : [value];
 }
 
-/** 오늘 먼저 봐야 하는 것인가. 긴급·중요이거나 마감이 7일 안이다. */
+/**
+ * 오늘 먼저 봐야 하는 것인가.
+ *
+ * 중요도만 보면 안 된다. 중요도는 법령 이름으로 정해지는데, 그 법이 개정됐어도
+ * 실질 변경이 없을 수 있다. 실제로 "먼저 볼 것" 1번이 이랬다.
+ *
+ *   [중요] 국제경기대회 지원법에 따라 설립된 조직위원회가 부가가치세 면제
+ *          대상임을 고시했으며, 사업자에게 실질적인 변경사항은 없습니다.
+ *
+ * 화면을 열자마자 "바뀐 것 없습니다"를 읽게 되면 그 자리는 죽은 자리가 된다.
+ * 기록에는 남기되 먼저 볼 것에는 올리지 않는다.
+ *
+ * `actionable` 이 아직 없는 API 응답도 있다. 프론트가 먼저 배포되면 그렇다.
+ * 그때 `!item.actionable` 로 쓰면 **모든 항목이 탈락해 이 구획이 통째로 사라진다.**
+ * 실제로 그렇게 사라졌다. 없는 값은 "모른다"이지 "아니다"가 아니므로,
+ * 명시적으로 false 일 때만 뺀다.
+ */
 function isLead(item: PublicContentSummary): boolean {
+  if (item.actionable === false) return false;
   return item.risk_level === 'CRITICAL' || item.risk_level === 'HIGH';
 }
 

@@ -75,6 +75,11 @@ class PublicContentSummary(BaseModel):
     #: 업종 코드와 화면용 이름. 상담 참고용 색인이지 적용 판정이 아니다.
     industries: list[str] = Field(default_factory=list)
     industry_labels: list[str] = Field(default_factory=list)
+    #: 달라지는 것이나 할 일이 하나라도 있는가.
+    #:
+    #: "먼저 볼 것"에 올릴지 판단하는 데 쓴다. 실질 변경이 없는 개정도
+    #: 기록으로는 남겨야 하지만, 오늘 먼저 볼 것은 아니다.
+    actionable: bool = True
 
 
 class PublicContentDetail(PublicContentSummary):
@@ -144,7 +149,21 @@ class MonthBucket(BaseModel):
     """HIGH·CRITICAL 건수. 그 달을 열어볼지 판단하는 신호다."""
 
 
-def _summary(content: TaxContent) -> PublicContentSummary:
+def _actionable(body: dict | None) -> bool:
+    """달라지는 것이나 할 일이 하나라도 있는가.
+
+    AI 는 실질 변경이 없으면 changes 를 빈 배열로 둔다(프롬프트가 그렇게 시킨다).
+    자구 정리나 인용 조문 번호만 바뀐 개정이 여기 해당한다.
+
+    그런 건이 "먼저 볼 것" 1번에 올라간 적이 있다. 사장님이 화면을 열자마자
+    보는 문장이 "사업자에게 실질적인 변경사항은 없습니다" 였다.
+    """
+    if not isinstance(body, dict):
+        return True
+    return bool(body.get("changes")) or bool(body.get("required_actions"))
+
+
+def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSummary:
     return PublicContentSummary(
         id=content.id,
         title=content.title,
@@ -161,6 +180,7 @@ def _summary(content: TaxContent) -> PublicContentSummary:
         updated_at=content.updated_at,
         industries=list(content.industries or []),
         industry_labels=[industry.label(code) for code in (content.industries or [])],
+        actionable=actionable,
     )
 
 
@@ -375,7 +395,24 @@ def public_feed(
         TaxContent.updated_at.desc(),
     ).limit(limit).offset(offset)
 
-    items = [_summary(c) for c in db.execute(ordered).scalars()]
+    contents = list(db.execute(ordered).scalars())
+
+    # 본문은 현재 버전에 있다. 목록에 나갈 만큼만 한 번에 읽는다 —
+    # 항목마다 따로 조회하면 한 화면에 백 번 넘게 왕복한다.
+    version_ids = [c.current_version_id for c in contents if c.current_version_id]
+    bodies: dict[UUID, dict] = {}
+    if version_ids:
+        bodies = {
+            v.id: (v.body if isinstance(v.body, dict) else {})
+            for v in db.execute(
+                select(ContentVersion).where(ContentVersion.id.in_(version_ids))
+            ).scalars()
+        }
+
+    items = [
+        _summary(c, actionable=_actionable(bodies.get(c.current_version_id)))
+        for c in contents
+    ]
     next_cursor = str(offset + limit) if offset + limit < total else None
     return PublicFeed(items=items, total=total, next_cursor=next_cursor)
 
@@ -455,12 +492,13 @@ def public_content(content_id: UUID, db: DbSession) -> PublicContentDetail:
         # 존재하지만 미공개인 경우와 없는 경우를 구분하지 않는다.
         raise NotFoundError("콘텐츠를 찾을 수 없습니다.", {"content_id": str(content_id)})
 
+    body = _body_of(db, content)
     detail = PublicContentDetail(
         # promulgation_date 는 요약에 이미 들어 있다.
-        **_summary(content).model_dump(),
+        **_summary(content, actionable=_actionable(body)).model_dump(),
         announcement_date=content.announcement_date,
         application_start=content.application_start,
-        body=_body_of(db, content),
+        body=body,
         sources=_sources_of(db, content),
         evidence_fields=_evidence_fields_of(db, content),
     )

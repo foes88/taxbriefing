@@ -106,6 +106,49 @@ class TestHiddenContent:
         assert Industry.INTERNAL.value not in codes
         assert codes == [Industry.ALL.value]
 
+    def test_no_change_content_is_marked_not_actionable(
+        self, client, db, make_source, make_raw_version
+    ):
+        """실질 변경이 없는 건은 "먼저 볼 것"에 올리지 않는다.
+
+        화면을 열자마자 읽는 첫 문장이 "사업자에게 실질적인 변경사항은
+        없습니다" 였던 적이 있다. 그 자리는 그러면 죽은 자리가 된다.
+        """
+        from app.models.tables import ContentVersion
+
+        content = self.publish(
+            db,
+            make_source,
+            make_raw_version,
+            title="국제경기대회 지원법 관련 고시",
+            industries=[Industry.ALL.value],
+        )
+        version = db.get(ContentVersion, content.current_version_id)
+        version.body = {"changes": [], "required_actions": []}
+        db.flush()
+
+        item = client.get("/api/v1/public/feed").json()["items"][0]
+
+        assert item["actionable"] is False
+
+    def test_real_change_is_actionable(self, client, db, make_source, make_raw_version):
+        from app.models.tables import ContentVersion
+
+        content = self.publish(
+            db,
+            make_source,
+            make_raw_version,
+            title="증권거래세법 시행규칙 (일부개정)",
+            industries=[Industry.ALL.value],
+        )
+        version = db.get(ContentVersion, content.current_version_id)
+        version.body = {"changes": ["세율이 0에서 5/10,000 으로 인상"]}
+        db.flush()
+
+        item = client.get("/api/v1/public/feed").json()["items"][0]
+
+        assert item["actionable"] is True
+
     def test_model_cannot_hide_content(self):
         """모델이 INTERNAL 을 말해도 받지 않는다.
 
