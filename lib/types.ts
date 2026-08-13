@@ -94,6 +94,26 @@ export interface TribunalBody {
   sections: { label: string; text: string }[];
 }
 
+/**
+ * 조문 한 조각. `changed` 가 법제처가 표시한 변경 부분이다.
+ *
+ * HTML 이 아니라 조각으로 받는다 — 태그를 그대로 심으면 원문에 섞여
+ * 들어온 것이 실행된다. 조각이면 글자로만 다룬다.
+ */
+export interface DiffSegment {
+  text: string;
+  changed: boolean;
+}
+
+/** 신구법 대조표. 법제처가 구/신 조문을 짝지어 준 것을 그대로 옮겼다. */
+export interface ComparisonBody {
+  rows: { no: string; old: DiffSegment[]; new: DiffSegment[] }[];
+  /** 담지 못하고 자른 조문 수. 0 이 아니면 화면에 그 사실을 적는다. */
+  dropped: number;
+  law_name: string;
+  revision_type: string;
+}
+
 export interface PublicContentDetail extends PublicContentSummary {
   announcement_date: string | null;
   promulgation_date: string | null;

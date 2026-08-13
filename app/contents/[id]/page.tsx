@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { Comparison, readComparison } from '@/components/Comparison';
 import { Block, DateCell, DateRow, FactGrid, InfoRow, SourceList } from '@/components/DetailParts';
 import { Masthead } from '@/components/Masthead';
 import { Caveat, DeadlineMark, RiskMark, StatusSeal } from '@/components/Seal';
@@ -169,6 +170,7 @@ function PolicyArticle({
     return [];
   };
 
+  const comparison = readComparison(body);
   const deadline = daysUntil(content.application_end);
   const actions = list('required_actions');
   const changes = list('changes');
@@ -266,12 +268,23 @@ function PolicyArticle({
         <Block title="사업자에게 미치는 영향" items={list('business_impact')} />
         <Block title="전문가 확인이 필요한 항목" items={list('needs_expert')} muted />
 
-        {actions.length === 0 && changes.length === 0 ? (
+        {/*
+          대조표가 붙어 있으면 "아직 작성되지 않았다" 가 아니다. 조문이
+          어떻게 바뀌는지가 바로 아래에 있는데 없다고 하면 그냥 나간다.
+        */}
+        {actions.length === 0 && changes.length === 0 && !comparison ? (
           <p className="text-[15px] leading-relaxed text-ink-2">
             상세 분석이 아직 작성되지 않았습니다. 아래 공식 원문을 확인해 주세요.
           </p>
         ) : null}
       </div>
+
+      {/*
+        조문 대조는 본문 폭(max-w-reading)을 벗어나 기사 전체 폭을 쓴다.
+        구/신 두 칸을 나란히 놓아야 읽히는데, 읽기 좋은 한 칸 폭에
+        두 칸을 욱여넣으면 한 줄에 서너 글자만 들어간다.
+      */}
+      {comparison ? <Comparison comparison={comparison} /> : null}
 
       {/* 검수 상태는 AI 생성 여부보다 우선해 표시한다 (§10.4). */}
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-rule bg-surface-sunk px-5 py-4 sm:px-8">
