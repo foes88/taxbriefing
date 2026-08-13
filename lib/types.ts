@@ -274,3 +274,22 @@ export interface ApiError {
   details: Record<string, unknown>;
   trace_id: string;
 }
+
+/**
+ * 신고·납부 마감일 한 건.
+ *
+ * 날짜가 법에 정해져 있어 수집도 AI 도 쓰지 않는다. 기한을 하루 틀리면
+ * 가산세가 붙으므로 지어낼 여지를 아예 두지 않았다.
+ */
+export interface Deadline {
+  date: string;
+  title: string;
+  note: string;
+  audience: string;
+  audience_label: string;
+  /** 근거 조문. 출처 없는 날짜는 싣지 않는다. */
+  basis: string;
+  /** 주말이라 다음 월요일로 민 것인가. */
+  shifted: boolean;
+  days_left: number;
+}

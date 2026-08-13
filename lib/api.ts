@@ -2,6 +2,7 @@ import type {
   AdminContent,
   ApiError,
   ContentSourceRef,
+  Deadline,
   GateReport,
   IndustryBucket,
   MonthBucket,
@@ -138,6 +139,12 @@ export const publicApi = {
       // 월 목록은 하루에 몇 번 바뀔까 말까다.
       cacheSeconds: 300,
     }),
+  /** 신고·납부 마감일. DB 를 안 보므로 캐시를 길게 잡아도 된다. */
+  calendar: (withinDays = 90) =>
+    request<Deadline[]>(`/public/calendar?within_days=${withinDays}`, undefined, {
+      cacheSeconds: PUBLIC_CACHE_SECONDS,
+    }),
+
   industries: () =>
     request<IndustryBucket[]>('/public/industries', undefined, { cacheSeconds: 300 }),
   news: (

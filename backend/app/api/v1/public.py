@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Annotated
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.core.errors import NotFoundError, ValidationFailedError
-from app.domain import industry
+from app.domain import industry, tax_calendar
 from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
 from app.domain.news_topic import LIKE_PATTERNS
 from app.models.tables import (
@@ -35,6 +36,9 @@ from app.models.tables import (
 from app.services.render.telegram import STATUS_LABEL, caveat_for
 
 router = APIRouter(prefix="/public", tags=["Public"])
+
+#: 표시 시간대 (§8.1). 저장은 UTC, 판단은 한국 시각이다.
+_SEOUL = ZoneInfo("Asia/Seoul")
 
 #: 공개 가능한 워크플로 상태. 이 목록 밖의 콘텐츠는 어떤 경로로도 노출되지 않는다.
 PUBLIC_STATES = (
@@ -467,6 +471,56 @@ def public_feed(
 #: 뉴스 탭에 나오는 출처 등급. A·B 는 공식 원문이므로 검수 경로로만 나간다.
 #: 등급으로 가르는 이유는 그게 실제 구분이기 때문이다 — "공식이냐 보도냐".
 NEWS_GRADES = ("C", "D")
+
+
+class DeadlineOut(BaseModel):
+    """세무 일정 한 건."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: dt.date
+    title: str
+    note: str
+    audience: str
+    audience_label: str
+    basis: str
+    """근거 조문. **출처 없는 날짜는 싣지 않는다.**"""
+
+    shifted: bool
+    """주말이라 다음 월요일로 민 것인가."""
+
+    days_left: int
+
+
+@router.get("/calendar", response_model=list[DeadlineOut])
+def public_calendar(
+    within_days: Annotated[int, Query(ge=1, le=365, description="며칠 안의 마감일")] = 90,
+    today: Annotated[dt.date | None, Query(include_in_schema=False)] = None,
+) -> list[DeadlineOut]:
+    """신고·납부 마감일.
+
+    **DB 를 보지 않는다.** 날짜가 법에 정해져 있어 수집할 것도, 모델에게
+    물어볼 것도 없다. 기한을 하루 틀리면 가산세가 붙으므로 지어낼 여지를
+    아예 두지 않는다.
+
+    개별 사업자의 기한은 과세유형·결산월·반기납부 여부에 따라 다르다.
+    여기 나오는 것은 일반 일정이고, 화면도 그렇게 말한다.
+    """
+    # 마감일은 한국 시각 기준이다. UTC 로 재면 하루가 어긋나는 날이 생긴다.
+    base = today or dt.datetime.now(dt.UTC).astimezone(_SEOUL).date()
+    return [
+        DeadlineOut(
+            date=item.date,
+            title=item.title,
+            note=item.note,
+            audience=item.audience.value,
+            audience_label=tax_calendar.LABEL[item.audience],
+            basis=item.basis,
+            shifted=item.shifted,
+            days_left=(item.date - base).days,
+        )
+        for item in tax_calendar.upcoming(base, within_days=within_days)
+    ]
 
 
 @router.get("/news", response_model=NewsFeed)

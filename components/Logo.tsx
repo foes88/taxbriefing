@@ -1,17 +1,21 @@
 /**
- * 검인(檢印).
+ * 브리핑.
  *
- * 이 서비스가 다른 세무 뉴스 모음과 갈리는 지점은 하나다 —
- * **공식 원문으로 확인하고 세무전문가가 검수한 것만 올린다.**
- * 그 약속을 그림으로 만든 것이다. 관공서 문서에 찍히는 도장이고,
- * 그래서 살짝 기울어 있다. 반듯하면 체크박스가 되고, 체크박스는
- * "고를 수 있는 것" 으로 읽힌다. 이건 이미 찍힌 표시다.
+ * 처음엔 검인(체크 도장)을 썼다. "검수했다" 는 약속을 그린 것이었는데,
+ * 체크박스는 어디에나 있는 모양이라 이 서비스의 것으로 읽히지 않았다.
  *
- * `currentColor` 로만 그린다. 짙은 남색 밴드에서는 흰색으로, 흰 바탕
- * 화면에서는 먹색으로 저절로 따라간다 — 색을 두 벌 관리하지 않는다.
+ * 이 서비스가 하는 일은 하나다. **매일 아침, 무엇이 바뀌었는지 짚어
+ * 말해 준다.** 그래서 말풍선이고, 그 안에 요약 세 줄이 있다.
  *
- * 파비콘은 `app/icon.svg` 에 따로 있다. 브라우저 탭에서는 배경을
- * 못 물려받아 남색 바탕을 직접 칠해야 한다.
+ * 가운데 줄만 굵고 짧다. 그게 **바뀐 줄**이다 — 조문 신구 대조에서
+ * 실제로 하는 일이고, 사장님이 알고 싶은 그 한 줄이다. 색을 두 벌
+ * 쓰지 않고 굵기로만 구분하므로 흑백으로 봐도 읽힌다 (NFR-013).
+ *
+ * `currentColor` 로만 그린다. 짙은 바탕에서는 흰색으로, 흰 바탕에서는
+ * 먹색으로 저절로 따라간다.
+ *
+ * 파비콘은 `app/icon.svg` 에 따로 있다. 브라우저 탭은 배경을 물려주지
+ * 않아 바탕을 직접 칠해야 한다.
  */
 export function Logo({ size = 26 }: { size?: number }) {
   return (
@@ -23,32 +27,26 @@ export function Logo({ size = 26 }: { size?: number }) {
       aria-hidden
       className="shrink-0"
     >
-      <g transform="rotate(-7 16 16)">
-        <rect
-          x="3.6"
-          y="3.6"
-          width="24.8"
-          height="24.8"
-          rx="6.4"
-          stroke="currentColor"
-          strokeWidth="2.6"
-        />
-        <path
-          d="M10.6 16.5l3.9 3.9 7.2-8.2"
-          stroke="currentColor"
-          strokeWidth="2.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </g>
+      {/*
+        말풍선. 왼쪽 아래로 꼬리가 내려간다 — 누가 나에게 말해 주는
+        모양이다. 내가 쓰는 메모가 아니라 받는 브리핑이다.
+      */}
+      <path
+        d="M6.6 4.5h18.8a2.6 2.6 0 0 1 2.6 2.6v12.6a2.6 2.6 0 0 1-2.6 2.6H12.4l-5.1 4.6a.9.9 0 0 1-1.5-.67V22.3H6.6A2.6 2.6 0 0 1 4 19.7V7.1a2.6 2.6 0 0 1 2.6-2.6Z"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+      />
+      {/* 요약 세 줄. 가운데가 바뀐 줄이라 굵고 짧다. */}
+      <path d="M9.4 10.4h13.2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <path d="M9.4 14.2h7.6" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M9.4 18h10.4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
     </svg>
   );
 }
 
 /**
  * 마크 + 글자.
- *
- * 글자에서 "Tax" 만 굵기를 살린다. 사장님이 기억하는 것은 그 세 글자다.
  */
 export function Wordmark({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
   return (
