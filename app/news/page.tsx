@@ -17,6 +17,14 @@ const RANGES = [
 ];
 
 /**
+ * 한 번에 보여줄 기사 수. 정책 탭과 같은 규칙이다.
+ *
+ * RSS 두 곳에서 하루 100건 가까이 들어온다. 전부 펼치면 정책 탭이 21,600px
+ * 이었던 것과 같은 상태가 된다. 뉴스는 훑다가 멈추는 화면이라 더 그렇다.
+ */
+const PAGE_SIZE = 25;
+
+/**
  * 뉴스 탭.
  *
  * 이 화면의 목적은 "무슨 일이 논의되고 있는지" 알려주는 것이지,
@@ -30,15 +38,22 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   const params = await searchParams;
   const q = typeof params.q === 'string' ? params.q : undefined;
   const days = Number(params.days) || 30;
+  const show = Math.min(200, Math.max(PAGE_SIZE, Number(params.show) || PAGE_SIZE));
 
   let feed: NewsFeed | null = null;
   let error: string | null = null;
 
   try {
-    feed = await publicApi.news({ q, days, limit: 80 });
+    feed = await publicApi.news({ q, days, limit: show });
   } catch (e) {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
+
+  const shown = feed?.items.length ?? 0;
+  const remaining = Math.max(0, (feed?.total ?? 0) - shown);
+  const moreHref = `/news?days=${days}${q ? `&q=${encodeURIComponent(q)}` : ''}&show=${
+    show + PAGE_SIZE
+  }`;
 
   const groups = groupByDate(feed?.items ?? [], (i) => i.published_at);
 
@@ -142,6 +157,17 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
                 </section>
               ))}
             </div>
+
+            {remaining > 0 ? (
+              <div className="mt-8 flex flex-col items-center gap-2.5">
+                <Link href={moreHref} scroll={false} className="btn-quiet w-full max-w-xs justify-center">
+                  {Math.min(PAGE_SIZE, remaining)}건 더 보기
+                </Link>
+                <p className="tabular text-[12.5px] text-ink-3">
+                  {shown} / {feed?.total ?? 0}건
+                </p>
+              </div>
+            ) : null}
 
             <p className="mt-6 text-center text-[13px] text-ink-3">
               링크를 누르면 해당 언론사 사이트로 이동합니다. TaxBriefing 은 기사 본문을

@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     naver_client_id: str | None = None
     naver_client_secret: str | None = None
 
+    # 열린국회정보 (open.assembly.go.kr). 법안 발의·상임위·본회의 단계를 본다.
+    # 공포된 법령만 보면 이미 늦다 — 이게 "남보다 먼저"의 앞쪽 절반이다.
+    assembly_api_key: str | None = None
+
     # 텔레그램 발송 (ADR-001 — 알림 채널).
     # 비밀키는 DB 에 저장하지 않는다 (§12.1). 환경변수·.env 에서만 읽는다.
     telegram_bot_token: str | None = None

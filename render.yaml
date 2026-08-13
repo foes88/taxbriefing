@@ -50,6 +50,10 @@ services:
       - key: TAXBRIEFING_AI_API_KEY
         sync: false
 
+      # 열린국회정보 (법안 발의·상임위·본회의)
+      - key: TAXBRIEFING_ASSEMBLY_API_KEY
+        sync: false
+
       # 네이버 검색 API (뉴스 탭). 없으면 뉴스 수집만 건너뛴다.
       - key: TAXBRIEFING_NAVER_CLIENT_ID
         sync: false
