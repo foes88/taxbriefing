@@ -21,10 +21,41 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
  */
 const LEAD_MAX = 4;
 
+/**
+ * 한 번에 보여줄 기록 수와, "더 보기"로 늘어나는 폭.
+ *
+ * 전부 내려받던 시절 이 페이지는 세로 21,600px 이었다. 118건이 한 화면에
+ * 깔리면 스크롤바가 실오라기가 되고, 아래에 뭐가 있는지 감각이 사라진다.
+ *
+ * 페이지 번호를 쓰지 않는 이유: 목록이 날짜별로 묶여 있어서 번호로 자르면
+ * 같은 날 공포분이 두 페이지에 걸쳐 쪼개진다. 그리고 사장님은 위에서부터
+ * 훑다가 멈추지, "3페이지에 있었는데"로 기억하지 않는다.
+ */
+const PAGE_SIZE = 30;
+
 function pick(params: Record<string, string | string[] | undefined>, key: string) {
   const value = params[key];
   if (value === undefined) return undefined;
   return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * "더 보기" 링크의 주소.
+ *
+ * 걸어 둔 조건(업종·월·검색어)을 **그대로 들고 간다.** 더 보기를 눌렀더니
+ * 필터가 풀리면 처음부터 다시 좁혀야 한다.
+ */
+function nextPageQuery(
+  params: Record<string, string | string[] | undefined>,
+  show: number,
+): string {
+  const next = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'show' || value === undefined) continue;
+    for (const v of Array.isArray(value) ? value : [value]) next.append(key, v);
+  }
+  next.set('show', String(show + PAGE_SIZE));
+  return next.toString();
 }
 
 /**
@@ -55,7 +86,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const month = typeof params.month === 'string' ? params.month : undefined;
   const from = typeof params.from === 'string' ? params.from : undefined;
   const to = typeof params.to === 'string' ? params.to : undefined;
-  const filtered = Object.keys(params).length > 0;
+  // show 는 "몇 건까지 펼쳐 봤는가"다. URL 에 있으므로 뒤로 가기와 공유가 된다.
+  const show = Math.min(300, Math.max(PAGE_SIZE, Number(params.show) || PAGE_SIZE));
+  const filtered = Object.keys(params).some((k) => k !== 'show');
 
   let feed: PublicFeed | null = null;
   let months: MonthBucket[] = [];
@@ -73,7 +106,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         risk_level: pick(params, 'risk_level'),
         industries: pick(params, 'industries'),
         deadline_within_days: params.deadline === '7' ? 7 : undefined,
-        limit: 100,
+        limit: show,
       }),
       publicApi.months(),
       publicApi.industries(),
@@ -199,9 +232,21 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                   </div>
 
                   {feed && feed.total > items.length ? (
-                    <p className="mt-6 text-center text-[13px] text-ink-3">
-                      {items.length}건 표시 · 전체 {feed.total}건. 왼쪽에서 월이나 업종을 골라
-                      좁혀 보세요.
+                    <div className="mt-8 flex flex-col items-center gap-2.5">
+                      <Link
+                        href={`?${nextPageQuery(params, show)}`}
+                        scroll={false}
+                        className="btn-quiet w-full max-w-xs justify-center"
+                      >
+                        {Math.min(PAGE_SIZE, feed.total - items.length)}건 더 보기
+                      </Link>
+                      <p className="tabular text-[12.5px] text-ink-3">
+                        {items.length} / {feed.total}건
+                      </p>
+                    </div>
+                  ) : feed && feed.total > PAGE_SIZE ? (
+                    <p className="mt-8 text-center text-[12.5px] text-ink-3">
+                      전체 {feed.total}건을 모두 보셨습니다.
                     </p>
                   ) : null}
                 </section>
