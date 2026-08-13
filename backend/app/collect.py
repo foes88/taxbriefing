@@ -22,7 +22,12 @@ from app.core.logging import configure_logging, get_logger
 from app.domain.enums import CollectorType
 from app.models.tables import Source
 from app.services.collectors.base import run_collection
-from app.services.collectors.law_go_kr import AdmRulCollector, LawCollector, LawGoKrClient
+from app.services.collectors.law_go_kr import (
+    AdmRulCollector,
+    LawCollector,
+    LawGoKrClient,
+    UpcomingLawCollector,
+)
 from app.services.collectors.naver_news import NaverNewsCollector
 from app.services.collectors.rss import RssCollector
 
@@ -31,7 +36,9 @@ logger = get_logger(__name__)
 #: 도메인 → 어댑터. 특정 API 를 쓰는 출처만 여기에 둔다.
 #: 나머지는 collector_type 으로 고른다 (RSS 등) — 출처를 늘려도 코드가 늘지 않는다.
 ADAPTERS = {
-    "law.go.kr": (LawCollector, AdmRulCollector),
+    # 현행법 → 행정규칙 → 시행예정 순. 시행예정을 마지막에 두는 이유는 없다 —
+    # 별개 canonical_url 을 쓰므로 서로 덮어쓰지 않는다.
+    "law.go.kr": (LawCollector, AdmRulCollector, UpcomingLawCollector),
     "openapi.naver.com": (NaverNewsCollector,),
 }
 
@@ -94,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
                 # 법령 어댑터만 공용 클라이언트를 받는다.
                 collector = (
                     adapter_cls(law_client)
-                    if adapter_cls in (LawCollector, AdmRulCollector)
+                    if adapter_cls in (LawCollector, AdmRulCollector, UpcomingLawCollector)
                     else adapter_cls()
                 )
                 print(f"\n▶ {source.display_name} / {collector.name} (최근 {args.days}일)")

@@ -121,6 +121,25 @@ def _parse_date(value: str | None) -> dt.date | None:
         return None
 
 
+def _to_list_item(row: dict[str, Any]) -> LawListItem:
+    """목록 한 행을 파싱한다.
+
+    target=law 와 target=eflaw 의 필드 구성이 같아서 둘이 공유한다.
+    """
+    return LawListItem(
+        law_id=str(row.get("법령ID", "")),
+        mst=str(row.get("법령일련번호", "")),
+        name=str(row.get("법령명한글", "")).strip(),
+        law_type=str(row.get("법령구분명", "")),
+        ministry=str(row.get("소관부처명", "")),
+        promulgation_date=_parse_date(row.get("공포일자")),
+        effective_date=_parse_date(row.get("시행일자")),
+        promulgation_no=str(row.get("공포번호", "")),
+        revision_type=str(row.get("제개정구분명", "")),
+        detail_link=str(row.get("법령상세링크", "")),
+    )
+
+
 def _as_list(value: Any) -> list[Any]:
     """API 가 결과 1건일 때 배열 대신 객체를 주는 경우를 흡수한다."""
     if value is None:
@@ -198,21 +217,7 @@ class LawGoKrClient:
         if envelope.get("resultCode") not in (None, "00"):
             raise LawApiError(f"법령 API 오류: {envelope.get('resultMsg')}")
 
-        return [
-            LawListItem(
-                law_id=str(row.get("법령ID", "")),
-                mst=str(row.get("법령일련번호", "")),
-                name=str(row.get("법령명한글", "")).strip(),
-                law_type=str(row.get("법령구분명", "")),
-                ministry=str(row.get("소관부처명", "")),
-                promulgation_date=_parse_date(row.get("공포일자")),
-                effective_date=_parse_date(row.get("시행일자")),
-                promulgation_no=str(row.get("공포번호", "")),
-                revision_type=str(row.get("제개정구분명", "")),
-                detail_link=str(row.get("법령상세링크", "")),
-            )
-            for row in _as_list(envelope.get("law"))
-        ]
+        return [_to_list_item(row) for row in _as_list(envelope.get("law"))]
 
     def get_law(self, mst: str) -> dict[str, Any]:
         """법령 본문 조회. 기본정보·제개정이유·개정문·조문을 담고 있다."""
@@ -221,6 +226,31 @@ class LawGoKrClient:
         if not law:
             raise LawApiError(f"법령 본문을 찾을 수 없습니다 (MST={mst})")
         return law
+
+    def search_upcoming_laws(self, query: str, *, display: int = 20) -> list[LawListItem]:
+        """**아직 시행되지 않은** 법령 (target=eflaw).
+
+        `target=law` 는 지금 효력이 있는 법만 준다. 그래서 수집한 145건이
+        전부 EFFECTIVE 였고, "시행 예정" 이라는 상태가 화면에 존재하지 않았다.
+
+        eflaw 는 공포는 됐지만 시행일이 아직 오지 않은 것까지 준다.
+        세무사무소가 "곧 이렇게 바뀝니다" 를 미리 말할 수 있는 근거가 이것이다.
+        필드 구성은 target=law 와 같아서 파서를 그대로 쓴다.
+        """
+        # **시행일 내림차순**(efdes)이다.
+        #
+        # 처음에 efasc(오름차순)로 뒀더니 108건을 조회하고 0건을 저장했다.
+        # eflaw 는 그 법의 시행일 이력을 전부 주는데, 오름차순이면 법당
+        # 가져오는 몇 건이 전부 옛날 시행분이라 미래 필터에서 다 걸러졌다.
+        # 우리가 원하는 것은 앞으로 올 것이므로 뒤에서부터 가져온다.
+        payload = self._get(
+            "lawSearch.do",
+            {"target": "eflaw", "query": query, "display": display, "sort": "efdes"},
+        )
+        envelope = payload.get("LawSearch", {})
+        if envelope.get("resultCode") not in (None, "00"):
+            raise LawApiError(f"법령 API 오류: {envelope.get('resultMsg')}")
+        return [_to_list_item(row) for row in _as_list(envelope.get("law"))]
 
     def search_admrul(self, query: str, *, display: int = 20) -> list[dict[str, Any]]:
         """행정규칙(고시·훈령·예규) 목록. 국세청 고시가 여기 있다."""
@@ -408,6 +438,123 @@ class LawCollector:
             "detail_link": item.detail_link,
             "changed_article_count": len(_changed_articles(law)),
             "source_field_dates": True,
+        }
+        db.flush()
+        stats.record(result.outcome)
+
+
+class UpcomingLawCollector:
+    """시행예정 법령 수집기 (target=eflaw).
+
+    **왜 별도 기록으로 두는가.**
+
+    LawCollector 는 한 법의 여러 개정을 같은 canonical_url 로 모아 버전으로
+    쌓는다. 개정은 새 기록이 아니라 새 버전이라는 원칙이다 (AT-02).
+
+    그런데 시행예정 개정은 다르다. 현행법과 **동시에 존재해야 한다.**
+
+        소득세법 (현행, 2026-07-01 시행)     ← 지금 적용되는 것
+        소득세법 (시행예정, 2027-01-01)      ← 앞으로 바뀔 것
+
+    같은 URL 로 넣으면 시행예정본이 현행본을 덮어써서, 사장님이 오늘 적용되는
+    기준을 못 보게 된다. 세무 브리핑에서 그건 사고다.
+    그래서 시행일을 URL 에 넣어 시행일마다 별개 기록으로 둔다.
+
+    시행일이 지나면 LawCollector 가 같은 내용을 현행으로 다시 수집한다.
+    중복처럼 보이지만 둘은 다른 것이다 — 하나는 "예고", 하나는 "현행"이고,
+    사용자가 그 시점에 알아야 할 것도 다르다.
+    """
+
+    name = "law.go.kr:eflaw"
+    version = ADAPTER_VERSION
+
+    def __init__(self, client: LawGoKrClient | None = None) -> None:
+        self.client = client or LawGoKrClient()
+
+    def collect(
+        self,
+        db: Session,
+        source: Source,
+        *,
+        since: dt.date | None = None,
+        limit: int = 50,
+    ) -> CollectStats:
+        """`since` 는 쓰지 않는다 — 이 수집기는 **미래**만 본다."""
+        del since
+
+        stats = CollectStats()
+        queries = tuple(source.settings.get("queries") or DEFAULT_TAX_QUERIES)
+        per_query = max(1, limit // max(1, len(queries)))
+        today = dt.datetime.now(dt.UTC).date()
+
+        for query in queries:
+            try:
+                items = self.client.search_upcoming_laws(query, display=per_query)
+            except LawApiError as exc:
+                stats.fail(f"eflaw:{query}", exc)
+                continue
+
+            for item in items:
+                stats.discovered += 1
+
+                # 시행일이 지났으면 그건 현행법이다. LawCollector 의 몫이다.
+                if not item.effective_date or item.effective_date <= today:
+                    continue
+                if not item.mst:
+                    continue
+
+                try:
+                    self._ingest_one(db, source, item, stats)
+                except Exception as exc:
+                    stats.fail(f"{item.name}(시행 {item.effective_date})", exc)
+
+        return stats
+
+    def _ingest_one(
+        self, db: Session, source: Source, item: LawListItem, stats: CollectStats
+    ) -> None:
+        law = self.client.get_law(item.mst)
+        text = build_normalized_text(item, law)
+        effective = item.effective_date.isoformat() if item.effective_date else "미정"
+
+        result = ingest(
+            db,
+            source_id=source.id,
+            # **시행일 + 공포번호**로 가른다.
+            #
+            # 처음엔 시행일만 넣었더니 소득세법 시행령 2027-01-01 시행분 6개
+            # 개정이 한 기록으로 뭉쳐 5개가 버전으로 밀려 안 보였다.
+            # 같은 날 시행되더라도 공포번호가 다르면 서로 다른 개정이고,
+            # 사장님이 봐야 할 내용도 다르다.
+            canonical_url=(
+                f"{item.canonical_url}?시행={effective}&공포={item.promulgation_no}"
+            ),
+            title=f"{item.name} ({item.revision_type}, {effective} 시행예정)".replace(
+                " (, ", " ("
+            ),
+            publisher=item.ministry or "법제처",
+            raw_body=text,
+            published_at=_as_datetime(item.promulgation_date),
+            source_item_id=f"{item.law_id}:{item.promulgation_no}:{effective}",
+            parser_version=f"law_go_kr_eflaw/{ADAPTER_VERSION}",
+        )
+
+        result.version.doc_metadata = {
+            "law_id": item.law_id,
+            "mst": item.mst,
+            "promulgation_date": item.promulgation_date.isoformat()
+            if item.promulgation_date
+            else None,
+            "effective_date": effective,
+            "promulgation_no": item.promulgation_no,
+            "revision_type": item.revision_type,
+            "law_type": item.law_type,
+            "ministry": item.ministry,
+            "detail_link": item.detail_link,
+            "changed_article_count": len(_changed_articles(law)),
+            "source_field_dates": True,
+            # 공포는 됐으나 시행 전이다. 이 값이 콘텐츠의 legal_status 를 정한다.
+            "policy_stage": "PROMULGATED_PENDING",
         }
         db.flush()
         stats.record(result.outcome)
