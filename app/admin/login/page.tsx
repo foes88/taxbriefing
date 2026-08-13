@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { Wordmark } from '@/components/Logo';
 import { ApiRequestError, auth } from '@/lib/api';
 
 export default function AdminLoginPage() {
@@ -31,7 +32,9 @@ export default function AdminLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="border border-rule bg-surface w-full max-w-sm p-7">
-        <h1 className="text-xl font-extrabold tracking-tight text-ink">TaxBriefing</h1>
+        <h1>
+          <Wordmark tone="dark" />
+        </h1>
         <p className="mt-1 text-sm text-ink-2">관리자 로그인</p>
 
         <form onSubmit={submit} className="mt-6 flex flex-col gap-3">

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 
 import { GateForm, GateFormSkeleton } from '@/components/GateForm';
+import { Wordmark } from '@/components/Logo';
 
 /**
  * 접근 잠금 화면.
@@ -27,8 +28,8 @@ export default async function GatePage({
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6">
-          <p className="text-[19px] font-extrabold tracking-[-0.02em] text-ink">TaxBriefing</p>
-          <div aria-hidden className="mt-2 h-[3px] w-10 bg-accent" />
+          <Wordmark tone="dark" />
+          <div aria-hidden className="mt-3 h-[3px] w-10 bg-accent" />
         </div>
 
         {unset ? (

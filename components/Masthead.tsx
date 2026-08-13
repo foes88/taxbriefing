@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { Wordmark } from './Logo';
+
 /**
  * 제호와 탭을 하나의 짙은 밴드로 묶는다.
  *
@@ -21,8 +23,8 @@ export function Masthead({
   return (
     <header className="bg-band text-white">
       <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-4 py-3.5">
-        <Link href="/" className="flex items-baseline gap-3">
-          <span className="text-[19px] font-extrabold tracking-[-0.03em]">TaxBriefing</span>
+        <Link href="/" className="flex items-center gap-3">
+          <Wordmark />
           {!compact ? (
             <span className="hidden border-l border-white/20 pl-3 text-[12.5px] font-medium text-white/60 sm:inline">
               공식 원문으로 확인한 세무 브리핑

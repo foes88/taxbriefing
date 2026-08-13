@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Logo } from '@/components/Logo';
 import { auth } from '@/lib/api';
 
 const NAV = [
@@ -34,8 +35,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen">
       <header className="border-b border-rule bg-surface">
         <div className="mx-auto flex max-w-page flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
-          <Link href="/admin" className="text-base font-extrabold tracking-tight text-ink">
-            TaxBriefing<span className="ml-1.5 text-xs font-medium text-ink-3">관리자</span>
+          <Link
+            href="/admin"
+            className="flex items-center gap-2 text-base font-extrabold tracking-tight text-ink"
+          >
+            <Logo size={20} />
+            TaxBriefing<span className="ml-0.5 text-xs font-medium text-ink-3">관리자</span>
           </Link>
 
           <nav className="flex gap-1">

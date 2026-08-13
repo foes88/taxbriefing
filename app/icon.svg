@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    브라우저 탭 아이콘.
+
+    components/Logo.tsx 와 같은 검인이지만 여기서는 바탕을 직접 칠한다.
+    탭은 배경색을 물려주지 않아서, 선만 그으면 밝은 테마에서 흰 선이
+    흰 바탕에 놓여 사라진다.
+  -->
+  <rect width="32" height="32" rx="7" fill="#111826"/>
+  <g transform="rotate(-7 16 16)" fill="none" stroke="#ffffff">
+    <rect x="6.4" y="6.4" width="19.2" height="19.2" rx="5" stroke-width="2.2"/>
+    <path d="M11.6 16.3l3.2 3.2 5.9-6.7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
