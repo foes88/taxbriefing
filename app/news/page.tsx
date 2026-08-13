@@ -156,7 +156,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
             <p className="mx-auto mt-2.5 max-w-sm text-[15px] leading-relaxed text-ink-2">
               {q
                 ? '검색어를 바꾸거나 기간을 넓혀 보세요.'
-                : '네이버 검색 API 키를 설정하면 매일 자동으로 모입니다.'}
+                : '세무 전문지 기사를 매일 아침 모읍니다. 잠시 후 다시 확인해 주세요.'}
             </p>
             {q ? (
               <Link href="/news" className="btn-quiet mt-6">

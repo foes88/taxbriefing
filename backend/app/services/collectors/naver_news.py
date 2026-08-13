@@ -95,6 +95,18 @@ class NaverNewsCollector:
 
     @property
     def configured(self) -> bool:
+        """키가 있어도 **검색 권한이 없으면 못 쓴다.**
+
+        2026년 8월 현재 네이버는 검색 API 를 기존 애플리케이션에 추가할 수
+        없게 막았다. 사용 API 에 '검색' 을 넣고 저장하면 이렇게 거절한다.
+
+            애플리케이션 설정 실패
+            신규로 등록할 수 없는 API 가 선택되었습니다.
+
+        권한 없는 키로 호출하면 401 `Scopes are Empty` 가 돌아온다.
+        예전에 발급받은 키가 있는 계정이라면 그대로 동작하므로 어댑터는 남긴다.
+        뉴스는 세무 전문지 RSS(세정일보·국세신문)로 모은다 — 키가 필요 없다.
+        """
         return bool(self.client_id and self.client_secret)
 
     def collect(
