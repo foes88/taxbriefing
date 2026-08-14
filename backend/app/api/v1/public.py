@@ -480,7 +480,11 @@ def public_feed(
 
     # 본문 없는 종류(법령해석)만 원문 주소를 같이 싣는다. 화면이 우리
     # 상세를 거치지 않고 바로 원문으로 보내야 하기 때문이다.
-    linkable = [c.id for c in contents if c.content_kind == ContentKind.INTERPRETATION.value]
+    linkable = [
+        c.id
+        for c in contents
+        if c.content_kind in (ContentKind.INTERPRETATION.value, ContentKind.PRECEDENT.value)
+    ]
     urls: dict[UUID, str] = {}
     if linkable:
         urls = dict(

@@ -43,11 +43,39 @@ logger = get_logger(__name__)
 ADAPTER_VERSION = "1.0.0"
 SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 
-#: 해석기관별 target. 둘 다 같은 응답 모양이다.
-TARGETS: tuple[tuple[str, str], ...] = (
-    ("ntsCgmExpc", "국세청"),
-    ("moefCgmExpc", "기획재정부"),
+#: target → (기본 발신기관, 콘텐츠 종류).
+#:
+#: 셋 다 "목록은 JSON, 본문은 없음" 이 같아서 한 수집기로 다룬다.
+#: 다만 판례는 성격이 다르다 — 심판원 결정과 달리 법원까지 간 사건이고
+#: 실무에서 더 무겁게 인용된다. 그래서 종류를 갈라 둔다.
+TARGETS: tuple[tuple[str, str, str], ...] = (
+    ("ntsCgmExpc", "국세청", "INTERPRETATION"),
+    ("moefCgmExpc", "기획재정부", "INTERPRETATION"),
+    ("prec", "법원", "PRECEDENT"),
 )
+
+#: target 별로 필드 이름이 다르다. 같은 뜻인데 부르는 말이 다를 뿐이다.
+#:
+#:     해석  안건명   · 법령해석일련번호 · 안건번호 · 해석일자 · 법령해석상세링크
+#:     판례  사건명   · 판례일련번호     · 사건번호 · 선고일자 · 판례상세링크
+FIELDS: dict[str, dict[str, str]] = {
+    "prec": {
+        "title": "사건명",
+        "serial": "판례일련번호",
+        "case_no": "사건번호",
+        "date": "선고일자",
+        "link": "판례상세링크",
+        "agency": "법원명",
+    },
+    "_default": {
+        "title": "안건명",
+        "serial": "법령해석일련번호",
+        "case_no": "안건번호",
+        "date": "해석일자",
+        "link": "법령해석상세링크",
+        "agency": "해석기관명",
+    },
+}
 
 #: 사업자에게 실제로 걸리는 세목. 12,530건을 다 가져오지 않는다 —
 #: 심판례와 같은 기준으로 고른다.
@@ -77,6 +105,7 @@ class InterpretationItem:
     agency: str
     decided_at: dt.date | None
     detail_url: str
+    kind: str = "INTERPRETATION"
 
     @property
     def canonical_url(self) -> str:
@@ -112,7 +141,9 @@ def _rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for inner in value.values():
             if isinstance(inner, list) and inner and isinstance(inner[0], dict):
                 return inner
-            if isinstance(inner, dict) and "법령해석일련번호" in inner:
+            if isinstance(inner, dict) and (
+                "법령해석일련번호" in inner or "판례일련번호" in inner
+            ):
                 return [inner]
     return []
 
@@ -173,15 +204,18 @@ class InterpretationCollector:
             return stats
 
         queries = tuple((source.settings or {}).get("queries") or DEFAULT_QUERIES)
-        targets = tuple((source.settings or {}).get("targets") or [t for t, _ in TARGETS])
+        picked = (source.settings or {}).get("targets")
+        targets = tuple(
+            t for t in TARGETS if picked is None or t[0] in picked
+        )
         # 세목과 기관으로 나눠 담는다. 한쪽이 실패해도 나머지는 들어온다.
         per_query = max(2, limit // max(1, len(queries) * len(targets)))
         seen: set[str] = set()
 
-        for target in targets:
+        for target, default_agency, kind in targets:
             for query in queries:
                 try:
-                    items = self._search(target, query, per_query)
+                    items = self._search(target, query, per_query, default_agency, kind)
                 except InterpretationError as exc:
                     stats.fail(f"{target}:{query}", exc)
                     continue
@@ -222,27 +256,35 @@ class InterpretationCollector:
             raise InterpretationError(f"JSON 이 아닙니다 ({body[:60]!r})")
         return response.json()
 
-    def _search(self, target: str, query: str, display: int) -> list[InterpretationItem]:
+    def _search(
+        self, target: str, query: str, display: int, default_agency: str, kind: str
+    ) -> list[InterpretationItem]:
         payload = self._get(
             {"target": target, "query": query, "display": display, "sort": "ddes"}
         )
+        f = FIELDS.get(target, FIELDS["_default"])
         out: list[InterpretationItem] = []
         for row in _rows(payload):
-            serial = str(row.get("법령해석일련번호", "")).strip()
-            url = str(row.get("법령해석상세링크", "")).strip()
-            title = str(row.get("안건명", "")).strip()
+            serial = str(row.get(f["serial"], "")).strip()
+            url = str(row.get(f["link"], "")).strip()
+            title = str(row.get(f["title"], "")).strip()
             # 셋 중 하나라도 없으면 담지 않는다. 링크 없는 해석은
             # "있다더라" 로만 남아 아무 데도 데려다주지 못한다.
             if not (serial and url and title):
                 continue
+            # 판례 상세링크는 상대 경로로 온다. 절대 주소로 만들어야
+            # 화면에서 눌렀을 때 우리 사이트가 아니라 법제처로 간다.
+            if url.startswith("/"):
+                url = f"https://www.law.go.kr{url}"
             out.append(
                 InterpretationItem(
                     serial=serial,
                     title=title,
-                    case_no=str(row.get("안건번호", "")).strip(),
-                    agency=str(row.get("해석기관명", "")).strip(),
-                    decided_at=_parse_date(row.get("해석일자")),
+                    case_no=str(row.get(f["case_no"], "")).strip(),
+                    agency=str(row.get(f["agency"], "")).strip() or default_agency,
+                    decided_at=_parse_date(row.get(f["date"])),
                     detail_url=url,
+                    kind=kind,
                 )
             )
         return out
@@ -278,8 +320,8 @@ class InterpretationCollector:
             "decided_at": item.decided_at.isoformat() if item.decided_at else None,
             "detail_link": item.detail_url,
             "matched_query": query,
-            # 해석례는 법령이 아니다. 시행일도 정책 상태도 붙이면 안 된다.
-            "content_kind": "INTERPRETATION",
+            # 해석례·판례는 법령이 아니다. 시행일도 정책 상태도 붙이면 안 된다.
+            "content_kind": item.kind,
             # 본문을 저장하지 않았다는 사실을 명시한다.
             # 이 표시가 있어야 화면이 "요약이 없다" 와 "요약할 것이 없다" 를
             # 구분해서 말할 수 있다.

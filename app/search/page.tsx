@@ -29,6 +29,8 @@ const KINDS = [
   // 다투기 전에 물어본 답. 상담 중에 "이런 경우는 어떻게 되나요" 를
   // 만나면 실무자가 먼저 찾는 것이 이것이다.
   { key: 'INTERPRETATION', label: '해석' },
+  // 심판원을 거쳐 법원까지 간 사건. 실무에서 가장 무겁게 인용된다.
+  { key: 'PRECEDENT', label: '판례' },
   { key: 'BILL', label: '국회 법안' },
   { key: 'NEWS', label: '뉴스' },
 ] as const;
@@ -72,7 +74,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
           // 전체일 때는 종류를 안 넘긴다. 서버 기본값이 법령만이라
           // 명시적으로 넷을 다 적어 준다.
           content_kind:
-            kind === 'ALL' ? ['POLICY', 'TRIBUNAL', 'INTERPRETATION', 'BILL', 'SUPPORT'] : [kind],
+            kind === 'ALL'
+              ? ['POLICY', 'TRIBUNAL', 'INTERPRETATION', 'PRECEDENT', 'BILL', 'SUPPORT']
+              : [kind],
           industries: industry ? [industry] : undefined,
           limit: show,
         }),

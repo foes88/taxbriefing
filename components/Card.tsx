@@ -163,6 +163,9 @@ export function NewsCard({ item }: { item: NewsItem }) {
  * 아니라 우리가 안 담은 것이다.
  */
 export function InterpretationCard({ item }: { item: PublicContentSummary }) {
+  // 판례는 법원 판결이고 해석은 과세관청 회신이다. 같은 알약을 붙이면
+  // 법원이 답장을 보낸 것처럼 읽힌다.
+  const isCourt = item.content_kind === 'PRECEDENT';
   return (
     <a
       href={item.source_url ?? '#'}
@@ -171,7 +174,7 @@ export function InterpretationCard({ item }: { item: PublicContentSummary }) {
       className="card-tap pad"
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="pill pill-good">공식 해석</span>
+        <span className="pill pill-good">{isCourt ? '법원 판결' : '공식 해석'}</span>
         <span className="pill pill-calm">본문 미수록</span>
       </div>
 
@@ -183,8 +186,10 @@ export function InterpretationCard({ item }: { item: PublicContentSummary }) {
       </h3>
 
       <p className="mt-2 text-meta text-ink-3">
-        {item.promulgation_date ? `${formatDate(item.promulgation_date)} 회신 · ` : ''}
-        국세법령정보시스템에서 원문 보기
+        {item.promulgation_date
+          ? `${formatDate(item.promulgation_date)} ${isCourt ? '선고' : '회신'} · `
+          : ''}
+        {isCourt ? '법제처에서 원문 보기' : '국세법령정보시스템에서 원문 보기'}
       </p>
     </a>
   );
@@ -192,7 +197,9 @@ export function InterpretationCard({ item }: { item: PublicContentSummary }) {
 
 /** 종류를 보고 알아서 고른다. 화면마다 분기를 반복하지 않는다. */
 export function ContentCard({ item }: { item: PublicContentSummary }) {
-  if (item.content_kind === 'INTERPRETATION') return <InterpretationCard item={item} />;
+  if (item.content_kind === 'INTERPRETATION' || item.content_kind === 'PRECEDENT') {
+    return <InterpretationCard item={item} />;
+  }
   if (item.content_kind === 'TRIBUNAL') return <TribunalCard item={item} />;
   return <PolicyCard item={item} />;
 }

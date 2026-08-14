@@ -66,6 +66,10 @@ class ContentKind(StrEnum):
     INTERPRETATION = "INTERPRETATION"
     """국세청·재정경제부 법령해석. 심판례와 같은 성격이다."""
 
+    PRECEDENT = "PRECEDENT"
+    """법원 판례. 심판원 결정과 다르다 — 심판을 거쳐 법원까지 간 사건이고,
+    그래서 실무에서 더 무겁게 인용된다."""
+
     BILL = "BILL"
     """국회 법률안. 아직 법이 아니다 — 통과 여부가 불확실하다."""
 

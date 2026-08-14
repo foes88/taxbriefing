@@ -91,7 +91,13 @@ def _already_summarized(body: dict) -> bool:
 #:
 #: 심판례와 해석례는 원문이 이미 [청구인 주장] / [판단 요지] / [판단 이유]
 #: 로 갈려 있다. 모델이 다시 쓸 것이 없고, 다시 쓰면 화자가 바뀐다.
-KINDS_WITHOUT_AI = frozenset({ContentKind.TRIBUNAL.value, ContentKind.INTERPRETATION.value})
+KINDS_WITHOUT_AI = frozenset(
+    {
+        ContentKind.TRIBUNAL.value,
+        ContentKind.INTERPRETATION.value,
+        ContentKind.PRECEDENT.value,
+    }
+)
 
 
 def run(

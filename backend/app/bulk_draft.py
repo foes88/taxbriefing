@@ -93,7 +93,11 @@ def _decide_risk(title: str, *, kind: str | None = None) -> RiskLevel:
     것에 할 일이 없고, 확정된 개정과 같은 표시를 달면 둘이 구분되지 않는다.
     실제로 아침 브리핑 6건이 전부 [중요] 법안으로 채워진 적이 있다.
     """
-    if kind in (ContentKind.BILL.value, ContentKind.INTERPRETATION.value):
+    if kind in (
+        ContentKind.BILL.value,
+        ContentKind.INTERPRETATION.value,
+        ContentKind.PRECEDENT.value,
+    ):
         return RiskLevel.LOW
     if any(p in title for p in _HIGH_RISK_PATTERNS):
         return RiskLevel.HIGH
@@ -232,7 +236,7 @@ def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict
         return _tribunal_body(version, meta)
     if meta.get("content_kind") == "BILL":
         return _bill_body(meta)
-    if meta.get("content_kind") == "INTERPRETATION":
+    if meta.get("content_kind") in ("INTERPRETATION", "PRECEDENT"):
         return _interpretation_body(meta)
 
     reasons = _extract_section(version.normalized_text, "제개정이유")
@@ -276,7 +280,7 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
         return _tribunal_summary(meta)
     if meta.get("content_kind") == "BILL":
         return _bill_summary(meta)
-    if meta.get("content_kind") == "INTERPRETATION":
+    if meta.get("content_kind") in ("INTERPRETATION", "PRECEDENT"):
         return _interpretation_summary(meta)
 
     name = raw.title
@@ -346,10 +350,15 @@ def _interpretation_summary(meta: dict) -> str:
     """
     agency = str(meta.get("agency") or "").strip() or "과세관청"
     decided = _parse_iso(meta.get("decided_at"))
+    is_court = meta.get("content_kind") == "PRECEDENT"
 
-    when = f" {decided.year}년 {decided.month}월 {decided.day}일 회신." if decided else ""
+    # 판례는 "선고", 해석은 "회신" 이다. 같은 말로 뭉뚱그리면 법원이
+    # 답장을 보낸 것처럼 읽힌다.
+    label = "판결" if is_court else "법령해석"
+    verb = "선고" if is_court else "회신"
+    when = f" {decided.year}년 {decided.month}월 {decided.day}일 {verb}." if decided else ""
     return (
-        f"{agency} 법령해석.{when} 본문은 원문에서 확인하세요 — "
+        f"{agency} {label}.{when} 본문은 원문에서 확인하세요 — "
         "요지를 우리가 정리하지 않았습니다."
     )[:250]
 
@@ -363,6 +372,7 @@ def _decide_kind(meta: dict) -> str:
     mapping = {
         "TRIBUNAL_DECISION": ContentKind.TRIBUNAL,
         "INTERPRETATION": ContentKind.INTERPRETATION,
+        "PRECEDENT": ContentKind.PRECEDENT,
         "BILL": ContentKind.BILL,
         "SUPPORT": ContentKind.SUPPORT,
     }
@@ -512,6 +522,18 @@ def run(
             #
             # 국회 API 의 PROC_RESULT 를 수집기가 읽어 BILL_PROPOSED /
             # ASSEMBLY_PASSED 로 갈라 두었는데 그걸 버리고 있었다.
+            # 해석·판례는 회신일·선고일 하나뿐이다. 공포일도 시행일도 없다.
+            # 그 날짜를 안 옮기면 화면이 "확인 필요" 를 띄우는데, 확인할
+            # 것이 없는 게 아니라 우리가 안 옮긴 것이다.
+            if content.content_kind in (
+                ContentKind.INTERPRETATION.value,
+                ContentKind.PRECEDENT.value,
+            ):
+                decided = _parse_iso(meta.get("decided_at"))
+                content.announcement_date = decided
+                content.promulgation_date = decided
+                content.effective_date = None
+
             if content.content_kind == ContentKind.BILL.value:
                 status = str(meta.get("legal_status") or "").strip()
                 if status in LegalStatus.__members__:
