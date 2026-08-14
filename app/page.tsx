@@ -36,6 +36,7 @@ const NOW_MAX = 4;
 const HORIZON_DAYS = 90;
 
 /** 오늘 화면에 얹을 뉴스 수. 여기는 훑는 자리지 읽는 자리가 아니다. */
+const PREANNOUNCE_MAX = 6;
 const NEWS_MAX = 4;
 
 /**
@@ -62,16 +63,20 @@ function isUrgent(item: PublicContentSummary): boolean {
 export default async function TodayPage() {
   let feed: PublicFeed | null = null;
   let upcoming: PublicFeed | null = null;
+  let preannounced: PublicFeed | null = null;
   let tribunal: PublicFeed | null = null;
   let news: NewsFeed | null = null;
   let error: string | null = null;
 
   try {
-    [feed, upcoming, tribunal, news] = await Promise.all([
+    [feed, upcoming, preannounced, tribunal, news] = await Promise.all([
       publicApi.feed({ limit: 40 }),
       // 건수는 서버에 묻는다. 화면에 나온 것에서 세면 틀린다 —
       // 예전에 레일에 15 라고 떴는데 실제로는 34 건이었다.
       publicApi.feed({ effective_from: seoulToday(), limit: 1 }),
+      // 입법예고. 이 서비스가 파는 것이 여기다 — 공포된 뒤에 아는 사람과
+      // 예고 단계에서 아는 사람은 고객에게 할 말이 다르다.
+      publicApi.feed({ legal_status: ['PREANNOUNCED'], limit: PREANNOUNCE_MAX }),
       publicApi.feed({ content_kind: ['TRIBUNAL'], limit: 3 }),
       publicApi.news({ days: 7, limit: NEWS_MAX }),
     ]);
@@ -79,11 +84,18 @@ export default async function TodayPage() {
     error = e instanceof Error ? e.message : '알 수 없는 오류';
   }
 
-  const items = feed?.items ?? [];
+  // **예고는 확정된 것과 섞지 않는다.**
+  //
+  // 상태만 다른 같은 모양의 카드로 이어 붙이면, 스크롤하다 「소득세법
+  // 일부개정법률안」을 이미 바뀐 것으로 읽는다. 이 화면에서 가장 위험한
+  // 오해가 그것이다. 자리를 따로 주고 제목에서 확정이 아니라고 먼저 말한다.
+  const items = (feed?.items ?? []).filter((i) => i.legal_status !== 'PREANNOUNCED');
   const urgent = items.filter(isUrgent).slice(0, NOW_MAX);
   const urgentIds = new Set(urgent.map((i) => i.id));
   const recent = items.filter((i) => !urgentIds.has(i.id)).slice(0, 6);
   const upcomingCount = upcoming?.total ?? 0;
+  const notices = preannounced?.items ?? [];
+  const noticeTotal = preannounced?.total ?? 0;
 
   const deadlineCount = items.filter((i) => {
     const days = daysUntil(i.application_end);
@@ -146,6 +158,27 @@ export default async function TodayPage() {
         {urgent.length > 0 ? (
           <Section title="지금 확인" note="중요도·마감 순">
             {urgent.map((item) => (
+              <ContentCard key={item.id} item={item} />
+            ))}
+          </Section>
+        ) : null}
+
+        {/*
+          확정된 것보다 **먼저** 놓는다. 공포는 이미 끝난 일이고, 예고는
+          아직 의견을 낼 수 있는 기간이 남아 있다. 지금 움직일 수 있는
+          쪽이 위에 있어야 한다.
+        */}
+        {notices.length > 0 ? (
+          <Section
+            title="예고 단계"
+            href="/search?kind=PREANNOUNCED"
+            hrefLabel={noticeTotal > notices.length ? `전체 ${noticeTotal}건` : '전체 보기'}
+          >
+            <p className="-mt-1 pb-1 text-meta leading-relaxed text-ink-3">
+              정부가 이렇게 바꾸겠다고 내놓고 의견을 받는 중입니다. 아직 확정된 개정이 아니며
+              내용이 달라지거나 무산될 수 있습니다.
+            </p>
+            {notices.map((item) => (
               <ContentCard key={item.id} item={item} />
             ))}
           </Section>

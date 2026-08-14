@@ -22,8 +22,20 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
  * 검색은 제목만 보지 않는다. 정작 답은 개정 내용과 사업자 할 일에
  * 있고, 심판례는 판단 이유 안에 있다 (search_text).
  */
+const ALL_KINDS = ['POLICY', 'TRIBUNAL', 'INTERPRETATION', 'PRECEDENT', 'BILL', 'SUPPORT'] as const;
+
+/**
+ * 칩 하나는 종류가 아니라 **단계**다.
+ *
+ * PREANNOUNCED 는 content_kind 가 아니라 legal_status 다. 두 축을 한 줄에
+ * 섞는 것이 개운하지는 않지만, 찾는 사람은 "법령이냐 심판례냐" 와
+ * "확정이냐 예고냐" 를 같은 무게로 떠올린다. 축이 다르다는 것은 우리
+ * 사정이지 쓰는 사람의 사정이 아니다.
+ */
 const KINDS = [
   { key: 'ALL', label: '전체' },
+  // 공포보다 앞선 단계. 의견을 낼 수 있는 기간이 남아 있어 맨 앞에 둔다.
+  { key: 'PREANNOUNCED', label: '입법예고' },
   { key: 'POLICY', label: '법령' },
   { key: 'TRIBUNAL', label: '심판례' },
   // 다투기 전에 물어본 답. 상담 중에 "이런 경우는 어떻게 되나요" 를
@@ -74,9 +86,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
           // 전체일 때는 종류를 안 넘긴다. 서버 기본값이 법령만이라
           // 명시적으로 넷을 다 적어 준다.
           content_kind:
-            kind === 'ALL'
-              ? ['POLICY', 'TRIBUNAL', 'INTERPRETATION', 'PRECEDENT', 'BILL', 'SUPPORT']
-              : [kind],
+            kind === 'ALL' || kind === 'PREANNOUNCED' ? [...ALL_KINDS] : [kind],
+          legal_status: kind === 'PREANNOUNCED' ? ['PREANNOUNCED'] : undefined,
           industries: industry ? [industry] : undefined,
           limit: show,
         }),

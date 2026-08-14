@@ -53,6 +53,13 @@ function headlineOf(item: PublicContentSummary) {
   const summary = item.one_line_summary?.trim();
   if (!summary) return { headline: name, statute: null as string | null };
 
+  // 입법예고는 법령안 이름이 곧 정보다. 「소득세법 일부개정법률안」을
+  // 보는 순간 실무자는 무엇이 걸리는지 안다. 요약은 그 아래에서
+  // 의견 마감을 말한다 — 두 개가 다른 것을 말하므로 둘 다 보여준다.
+  if (item.legal_status === 'PREANNOUNCED') {
+    return { headline: name, statute: null as string | null };
+  }
+
   const strip = (s: string) => s.replace(/[「」·\s()]/g, '');
   if (strip(summary).includes(strip(item.title))) {
     return { headline: name, statute: null as string | null };
@@ -65,6 +72,11 @@ export function PolicyCard({ item }: { item: PublicContentSummary }) {
   const { headline, statute } = headlineOf(item);
   const effective = effectiveLabel(item.effective_date);
   const urgency = <Urgency item={item} />;
+
+  // 예고에는 시행일이라는 것이 아직 없다. 「시행일 미정」은 틀린 말은
+  // 아니지만, 상태 배지와 경고 문구가 이미 확정이 아니라고 말한 뒤에
+  // 세 번째로 같은 말을 하는 자리가 된다. 그 자리를 마감에 내준다.
+  const preannounced = item.legal_status === 'PREANNOUNCED';
 
   return (
     <Link href={`/contents/${item.id}`} className="card-tap pad">
@@ -80,12 +92,23 @@ export function PolicyCard({ item }: { item: PublicContentSummary }) {
       */}
       <h3 className="mt-2.5 line-clamp-2 max-w-reading text-card text-ink">{headline}</h3>
 
-      <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta">
-        <span className={`font-bold ${effective.tone === 'soon' ? 'text-danger' : 'text-ink-2'}`}>
-          {effective.text}
-        </span>
-        {statute ? <span className="text-ink-3">{statute}</span> : null}
-      </p>
+      {preannounced ? null : (
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta">
+          <span className={`font-bold ${effective.tone === 'soon' ? 'text-danger' : 'text-ink-2'}`}>
+            {effective.text}
+          </span>
+          {statute ? <span className="text-ink-3">{statute}</span> : null}
+        </p>
+      )}
+
+      {/*
+        예고에서는 이 줄이 핵심이다. 의견을 낼 수 있는 기간이 언제까지인지.
+        제목이 요약에 들어 있으면 요약을 버리는 규칙 때문에 이 문장이
+        한동안 화면에서 사라져 있었다.
+      */}
+      {preannounced && item.one_line_summary ? (
+        <p className="mt-2 text-meta font-bold text-ink-2">{item.one_line_summary}</p>
+      ) : null}
 
       {item.status_caveat ? (
         <p className="mt-2 text-meta font-semibold text-warn">{item.status_caveat}</p>

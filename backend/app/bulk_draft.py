@@ -72,6 +72,17 @@ def _parse_iso(value: str | None) -> dt.date | None:
         return None
 
 
+def _is_preannounce(meta: dict) -> bool:
+    """입법예고인가.
+
+    종류(content_kind)는 POLICY 다 — 결국 법령이 될 것이기 때문이다.
+    갈라야 하는 것은 **어느 단계인가** 이고 그건 legal_status 에 있다.
+    두 축을 하나로 합치면 "법령이면 시행일이 있다" 같은 잘못된 전제가
+    다시 들어온다.
+    """
+    return str(meta.get("legal_status") or "").strip() == LegalStatus.PREANNOUNCED.value
+
+
 def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today: dt.date) -> LegalStatus:
     """법적 상태를 원문 필드에서 **판정**한다. 추정하지 않는다.
 
@@ -86,7 +97,9 @@ def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today
     return LegalStatus.UNKNOWN
 
 
-def _decide_risk(title: str, *, kind: str | None = None) -> RiskLevel:
+def _decide_risk(
+    title: str, *, kind: str | None = None, preannounced: bool = False
+) -> RiskLevel:
     """중요도는 **지금 손봐야 하는 정도**다.
 
     법안은 아무리 큰 세법이라도 [중요] 를 달지 않는다. 통과할지 모르는
@@ -98,6 +111,11 @@ def _decide_risk(title: str, *, kind: str | None = None) -> RiskLevel:
         ContentKind.INTERPRETATION.value,
         ContentKind.PRECEDENT.value,
     ):
+        return RiskLevel.LOW
+    # 입법예고도 같다. 세법 전체가 한꺼번에 예고되는 날이 있는데
+    # (2026년 개정안 10건이 같은 날 올라왔다) 그게 전부 [중요] 로
+    # 나가면 확정된 개정이 그 아래 묻힌다.
+    if preannounced:
         return RiskLevel.LOW
     if any(p in title for p in _HIGH_RISK_PATTERNS):
         return RiskLevel.HIGH
@@ -230,6 +248,69 @@ def _interpretation_body(meta: dict) -> dict:
     }
 
 
+def _preannounce_body(meta: dict) -> dict:
+    """입법예고 본문.
+
+    **법령 틀을 쓰면 정반대가 된다.** 그냥 두면 이렇게 나갔을 것이다.
+
+        「부가가치세법 일부개정법률안 입법예고」이(가) 개정되어
+        시행일은 원문 확인이 필요합니다.
+        · 시행일 전에 해당 조문이 우리 사업장에 적용되는지 확인하세요.
+
+    개정된 것이 없다. 정부가 "이렇게 바꾸겠다" 고 내놓고 의견을 받는
+    중이고, 이 기간에 내용이 달라지거나 무산될 수 있다. 시행일은
+    아직 존재하지 않는다.
+
+    법안과 같은 자리에 있지만 다른 것이다 — 법안은 국회의원이 발의한
+    것이고, 입법예고는 정부가 낸 것이다. 그래서 말도 갈랐다.
+    """
+    agency = str(meta.get("agency") or "").strip()
+    law_type = str(meta.get("law_type") or "").strip()
+    opens = str(meta.get("opens_at") or "").strip()
+    closes = str(meta.get("closes_at") or "").strip()
+
+    changes: list[str] = []
+    if agency:
+        changes.append(f"입법예고 기관: {agency}")
+    if law_type:
+        changes.append(f"법령종류: {law_type}")
+    if opens and closes:
+        changes.append(f"의견 제출 기간: {opens} ~ {closes}")
+
+    return {
+        "changes": changes,
+        # **할 일을 만들지 않는다.** 확정되지 않은 개정에 조치를 시키면
+        # 사업자가 안 해도 될 일을 하고, 정작 확정된 개정과 구분이 안 된다.
+        "required_actions": [],
+        "needs_expert": [
+            "정부가 입법예고한 단계입니다. 아직 확정된 개정이 아니며 "
+            "의견 수렴 기간에 내용이 달라지거나 무산될 수 있습니다. "
+            "지금 확정된 제도로 보고 준비하시면 안 됩니다."
+        ],
+    }
+
+
+def _preannounce_summary(raw: RawContent, meta: dict) -> str:
+    """입법예고 요약. **시행된다고 말하지 않는다.**
+
+    처음에는 「부가가치세법 일부개정법률안」이(가) 입법예고됐습니다 로
+    시작하게 썼다. 그런데 카드가 그 문장을 통째로 버렸다 — 요약이 제목을
+    품고 있으면 제목만 보여주는 규칙이 있어서다(headlineOf). 그 규칙은
+    자동 생성 문구가 제목을 두 번 쓰는 것을 막으려고 둔 것이라 옳다.
+
+    문제는 그 문장 안에 **의견 마감 날짜**가 들어 있었다는 것이다. 이
+    항목에서 가장 중요한 사실이 규칙에 걸려 사라졌다. 제목을 빼고 마감을
+    앞에 놓는다 — 제목은 카드가 이미 크게 보여준다.
+    """
+    parsed = _parse_iso(str(meta.get("closes_at") or "").strip())
+    if parsed is None:
+        return "정부가 입법예고한 단계입니다. 아직 확정된 개정이 아닙니다."
+    # 확정이 아니라는 말은 여기서 하지 않는다. 상태 배지(입법·행정예고)와
+    # 경고 문구(시행 확정 아님 · 최종안 변경 가능)가 이미 두 번 말한다.
+    # 세 번째로 적으면 정작 이 줄에만 있는 사실 — 마감 날짜 — 이 묻힌다.
+    return f"의견 제출은 {parsed.year}년 {parsed.month}월 {parsed.day}일까지입니다."
+
+
 def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict:
     """화면에 보여줄 구조화 본문. 원문 필드와 원문 구획만 사용한다."""
     if meta.get("content_kind") == "TRIBUNAL_DECISION":
@@ -238,6 +319,9 @@ def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict
         return _bill_body(meta)
     if meta.get("content_kind") in ("INTERPRETATION", "PRECEDENT"):
         return _interpretation_body(meta)
+    # 종류는 POLICY 지만 아직 법이 아니다. 상태로 가른다.
+    if _is_preannounce(meta):
+        return _preannounce_body(meta)
 
     reasons = _extract_section(version.normalized_text, "제개정이유")
     revisions = _extract_section(version.normalized_text, "개정문")
@@ -282,6 +366,8 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
         return _bill_summary(meta)
     if meta.get("content_kind") in ("INTERPRETATION", "PRECEDENT"):
         return _interpretation_summary(meta)
+    if _is_preannounce(meta):
+        return _preannounce_summary(raw, meta)
 
     name = raw.title
     revision = meta.get("revision_type") or "개정"
@@ -499,7 +585,11 @@ def run(
                 title=raw.title[:120],
                 source_version_ids=[version.id],
                 legal_status=_decide_status(promulgated, effective, today),
-                risk_level=_decide_risk(raw.title, kind=_decide_kind(meta)),
+                risk_level=_decide_risk(
+                    raw.title,
+                    kind=_decide_kind(meta),
+                    preannounced=_is_preannounce(meta),
+                ),
                 body=_build_body(raw, version, meta),
                 roles={version.id: SourceRole.PRIMARY},
                 now=dt.datetime.now(dt.UTC),
@@ -532,6 +622,23 @@ def run(
                 decided = _parse_iso(meta.get("decided_at"))
                 content.announcement_date = decided
                 content.promulgation_date = decided
+                content.effective_date = None
+
+            # **입법예고는 공포도 시행도 안 됐다.**
+            #
+            # 법령 필드로 상태를 정하면 공포일·시행일이 없어 UNKNOWN 이
+            # 되고 화면에 "상태 확인 필요" 가 붙는다. 확인이 필요한 게
+            # 아니라 예고된 것이다. 시행일 자리는 비워 둔다 — 확정돼야
+            # 생기는 값이라 지금 채우면 거짓이다.
+            #
+            # 의견 제출 마감은 application_end 에 넣지 않는다. 그 칸은
+            # "제도가 적용되는 기간" 이지 "의견을 낼 수 있는 기간" 이
+            # 아니다. 뜻이 다른 값을 같은 칸에 넣으면 일정 화면이
+            # 시행 예정으로 읽는다. 본문에만 둔다.
+            if _is_preannounce(meta):
+                content.legal = LegalStatus.PREANNOUNCED
+                content.announcement_date = _parse_iso(meta.get("noticed_at"))
+                content.promulgation_date = None
                 content.effective_date = None
 
             if content.content_kind == ContentKind.BILL.value:
