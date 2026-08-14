@@ -9,7 +9,18 @@ import { ApiRequestError, publicApi } from '@/lib/api';
 import { daysUntil, effectiveLabel, formatDateTime, stripRevisionSuffix } from '@/lib/format';
 import type { PublicContentDetail, TribunalBody } from '@/lib/types';
 
-export const dynamic = 'force-dynamic';
+/*
+  **텔레그램 링크가 여는 화면이다.** 아침에 브리핑을 받고 누르는 그
+  한 번이 이 서비스의 첫인상이라, 여기가 제일 빨라야 한다.
+
+  force-dynamic 이면 방문마다 Vercel → Render → Neon 을 왕복한다.
+  그런데 내용은 하루 한 번 배치가 돌 때만 바뀐다. 5분 캐시로 두면
+  같은 링크를 여러 사람이 눌러도 첫 사람만 왕복한다.
+
+  정정본이 5분 늦게 보일 수 있다. 그건 감수한다 — 정정은 드물고,
+  매번 왕복하는 대가가 훨씬 크다.
+*/
+export const revalidate = 300;
 
 /**
  * 콘텐츠 상세 (U-03, §10.3 표준 블록).

@@ -437,7 +437,15 @@ def public_feed(
             TaxContent.application_end <= horizon,
         )
 
-    total = len(db.execute(stmt).scalars().all())
+    # **세기만 할 때는 세기만 한다.**
+    #
+    # 예전에는 `len(db.execute(stmt).scalars().all())` 였다. 스무 건을
+    # 보여주려고 조건에 맞는 콘텐츠 전부를 ORM 객체로 만들어 놓고 길이만
+    # 쟀다. 284건이면 284개를 만들었다 버린 셈이고, 목록 한 번 여는 데
+    # 500ms 가 들었다. 늘어날수록 나빠지는 종류의 낭비다.
+    total = db.execute(
+        select(func.count()).select_from(stmt.order_by(None).subquery())
+    ).scalar_one()
 
     # 중요도 → 마감 임박 → 최신 순 (FR-USR-001).
     ordered = stmt.order_by(
@@ -569,7 +577,9 @@ def public_news(
     if q:
         stmt = stmt.where(RawContent.title.ilike(f"%{q}%"))
 
-    total = len(db.execute(stmt).all())
+    total = db.execute(
+        select(func.count()).select_from(stmt.order_by(None).subquery())
+    ).scalar_one()
     rows = db.execute(
         stmt.order_by(RawContent.published_at.desc()).limit(limit).offset(offset)
     ).all()

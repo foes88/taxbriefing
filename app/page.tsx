@@ -6,7 +6,11 @@ import { API_BASE, API_BASE_IS_DEFAULT, publicApi } from '@/lib/api';
 import { daysUntil, seoulToday, todayLabel } from '@/lib/format';
 import type { NewsFeed, PublicContentSummary, PublicFeed } from '@/lib/types';
 
-export const dynamic = 'force-dynamic';
+/*
+  하루 한 번 배치가 돌 때만 내용이 바뀐다. 2분 캐시로 두면 아침에
+  여러 사람이 같은 화면을 열어도 왕복은 한 번이다.
+*/
+export const revalidate = 120;
 
 /**
  * 오늘.
