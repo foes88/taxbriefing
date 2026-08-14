@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.domain.admin_rule import is_internal_rule
 from app.models.tables import Source
 from app.services.collectors.base import CollectStats
 from app.services.ingest import ingest
@@ -580,6 +581,9 @@ class AdmRulCollector:
         stats = CollectStats()
         queries = tuple(source.settings.get("admrul_queries") or DEFAULT_ADMRUL_QUERIES)
         per_query = max(1, limit // max(1, len(queries)))
+        # 자른 것은 세어 둔다. 몇 건이 왜 빠졌는지 남지 않으면
+        # 다음에 뭔가 안 보일 때 어디를 볼지 알 수 없다.
+        skipped: list[str] = []
 
         for query in queries:
             try:
@@ -596,6 +600,12 @@ class AdmRulCollector:
 
                 name = str(row.get("행정규칙명", "")).strip()
                 if not name:
+                    continue
+
+                # 부처 내부 운영 규칙은 담지 않는다. 「국세청당직근무규정」은
+                # 사장님이 알 이유가 없고, 요약 토큰만 먹는다.
+                if is_internal_rule(name):
+                    skipped.append(name)
                     continue
 
                 try:
@@ -632,6 +642,11 @@ class AdmRulCollector:
                     stats.record(result.outcome)
                 except Exception as exc:
                     stats.fail(name, exc)
+
+        if skipped:
+            logger.info(
+                "admrul.internal_skipped", count=len(skipped), sample=skipped[:5]
+            )
 
         return stats
 
