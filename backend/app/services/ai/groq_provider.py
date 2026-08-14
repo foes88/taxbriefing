@@ -37,6 +37,14 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 #: 무료 티어는 1회 요청 크기와 분당 토큰이 모두 제한되므로 보수적으로 잡는다.
 MAX_DOC_CHARS = 6_000
 
+#: 출력 예산.
+#:
+#: 추론형 모델은 답을 내기 전에 토큰을 쓴다. 300 으로 잡았을 때는 JSON 이
+#: 중간에서 잘렸고, 2,400 으로도 조세특례제한법처럼 항목이 많은 건은
+#: 닫는 괄호에 닿기 전에 끝났다. 모자라면 두 배씩 올려 다시 부른다.
+MAX_OUTPUT_TOKENS = 2_400
+MAX_OUTPUT_TOKENS_CEILING = 9_600
+
 #: 429(분당 한도)는 기다리면 풀린다. 413(요청 과대)은 줄여야 풀린다.
 MAX_RETRIES = 4
 BACKOFF_SECONDS = (5, 12, 25, 45)
@@ -136,6 +144,26 @@ class GroqDailyExhausted(GroqError):
         self.limit = limit
 
 
+class GroqUnfinishedJson(GroqError):
+    """JSON 을 닫기 전에 출력 토큰이 떨어졌다.
+
+    `response_format: json_object` 로 부르면 모델이 JSON 을 완성하지
+    못했을 때 GROQ 가 400 을 준다.
+
+        Failed to validate JSON. Please adjust your prompt.
+
+    문구만 보면 프롬프트가 잘못된 것 같지만 아니다. 조세특례제한법처럼
+    개정 항목이 많은 건에서만 났고, 짧은 건은 같은 프롬프트로 잘 됐다.
+    추론형 모델이라 답을 내기 전에 토큰을 쓰고, 그러고 나서 목록이
+    길어지면 닫는 괄호에 닿기 전에 예산이 끝난다.
+
+    **기다려도 안 되고 원문을 줄여도 안 된다.** 출력 예산을 늘려야 한다.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("모델이 JSON 을 끝내기 전에 출력 예산이 떨어졌습니다.")
+
+
 class GroqTooLarge(GroqError):
     """1회 요청이 너무 크다. 기다려도 소용없고 줄여야 한다."""
 
@@ -229,10 +257,22 @@ class GroqProvider:
         413 은 요청 자체가 커서 나므로 기다려도 소용없다 — **원문을 줄여서** 다시 보낸다.
         """
         budget = MAX_DOC_CHARS
+        # 출력 예산. JSON 을 못 닫으면 늘려서 다시 부른다.
+        out_budget = MAX_OUTPUT_TOKENS
 
         for attempt in range(MAX_RETRIES):
             try:
-                return self._call(self._build_messages(request, budget))
+                return self._call(
+                    self._build_messages(request, budget), max_tokens=out_budget
+                )
+            except GroqUnfinishedJson as exc:
+                if out_budget >= MAX_OUTPUT_TOKENS_CEILING:
+                    raise GroqError(
+                        "출력 예산을 최대로 올려도 모델이 JSON 을 끝내지 못합니다. "
+                        "개정 항목이 지나치게 많은 건일 수 있습니다."
+                    ) from exc
+                out_budget = min(out_budget * 2, MAX_OUTPUT_TOKENS_CEILING)
+                logger.info("groq.grow_output", new_budget=out_budget)
             except GroqRateLimited as exc:
                 if attempt == MAX_RETRIES - 1:
                     raise GroqError("GROQ 분당 한도를 계속 초과합니다.") from exc
@@ -337,6 +377,8 @@ class GroqProvider:
             raise GroqRateLimited(_retry_after(response))
         if response.status_code == 413:
             raise GroqTooLarge()
+        if response.status_code == 400 and "Failed to validate JSON" in response.text:
+            raise GroqUnfinishedJson()
         if response.status_code >= 400:
             raise GroqError(f"GROQ HTTP {response.status_code}: {response.text[:300]}")
 

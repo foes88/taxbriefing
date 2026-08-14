@@ -6,9 +6,58 @@
 
 from __future__ import annotations
 
-import httpx
+import datetime as dt
+import json
 
-from app.services.ai.groq_provider import GroqDailyExhausted, _daily_exhausted, _retry_after
+import httpx
+import pytest
+
+from app.services.ai.groq_provider import (
+    GroqDailyExhausted,
+    GroqProvider,
+    _daily_exhausted,
+    _retry_after,
+)
+from app.services.ai.provider import AnalysisRequest, SourceDocument
+
+
+def _provider(handler) -> GroqProvider:
+    provider = GroqProvider(
+        api_key="test", model="test-model", client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    return provider
+
+
+def _request() -> AnalysisRequest:
+    return AnalysisRequest(
+        documents=(
+            SourceDocument(
+                source_version_id="00000000-0000-0000-0000-000000000001",
+                authority="A",
+                publisher="법제처",
+                title="소득세법 시행령",
+                canonical_url="https://www.law.go.kr/법령/소득세법 시행령",
+                published_at=None,
+                collected_at=None,
+                normalized_text="제1조 …",
+            ),
+        ),
+        reference_date=dt.date(2026, 8, 14),
+        prompt_version="v1",
+    )
+
+
+def _ok_payload() -> dict:
+    body = {
+        "one_line_summary": "요약",
+        "affected_users": [],
+        "excluded_users": [],
+        "changes": [],
+        "business_impact": [],
+        "required_actions": [],
+        "warnings": [],
+    }
+    return {"choices": [{"message": {"content": json.dumps(body, ensure_ascii=False)}}], "usage": {}}
 
 DAILY_BODY = (
     '{"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in '
@@ -74,3 +123,54 @@ class TestRetryAfter:
         """서버가 21분을 기다리라고 해도 그만큼 붙잡고 있지 않는다."""
         body = '{"error":{"message":"Please try again in 1268s."}}'
         assert _retry_after(_response(body)) == 90.0
+
+
+UNFINISHED_JSON_BODY = (
+    '{"error":{"message":"Failed to validate JSON. Please adjust your prompt. '
+    'See \'failed_generation\'.","type":"invalid_request_error",'
+    '"failed_generation":"{\\"one_line_summary\\": \\"소득세법 시행령이"}}'
+)
+
+
+class TestUnfinishedJson:
+    """모델이 JSON 을 닫기 전에 출력 예산이 떨어진 경우.
+
+    GROQ 문구는 "Failed to validate JSON. Please adjust your prompt." 다.
+    프롬프트가 잘못된 것처럼 읽히지만 아니다 — 조세특례제한법처럼 개정
+    항목이 많은 건에서만 났고 짧은 건은 같은 프롬프트로 잘 됐다.
+
+    기다려도 안 되고 원문을 줄여도 안 된다. 출력 예산을 늘려야 한다.
+    """
+
+    def test_recognised_as_its_own_failure(self):
+        from app.services.ai.groq_provider import GroqError
+
+        provider = _provider(lambda r: httpx.Response(400, text=UNFINISHED_JSON_BODY))
+        # 예산을 최대까지 올려도 계속 실패하면 그 사실을 말하고 포기한다.
+        with pytest.raises(GroqError, match="최대로 올려도"):
+            provider.analyze(_request())
+
+    def test_grows_the_budget_and_succeeds(self):
+        """한 번 늘려서 되면 그걸로 끝난다."""
+        seen: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            import json as _json
+
+            seen.append(_json.loads(request.content)["max_tokens"])
+            if len(seen) == 1:
+                return httpx.Response(400, text=UNFINISHED_JSON_BODY)
+            return httpx.Response(200, json=_ok_payload())
+
+        _provider(handler).analyze(_request())
+        assert seen[0] == 2_400
+        assert seen[1] == 4_800, "예산을 두 배로 올려 다시 불러야 한다"
+
+    def test_other_400_is_not_mistaken_for_this(self):
+        from app.services.ai.groq_provider import GroqError
+
+        provider = _provider(
+            lambda r: httpx.Response(400, text='{"error":{"message":"bad model"}}')
+        )
+        with pytest.raises(GroqError, match="HTTP 400"):
+            provider.analyze(_request())
