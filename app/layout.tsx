@@ -2,16 +2,38 @@ import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
 
+const TITLE = 'TaxBriefing — 공식 원문으로 확인한 세무 브리핑';
+const DESCRIPTION =
+  '국세·지방세·노무·4대보험·지원사업 관련 공식 발표를 법령·관보 원문으로 확인하고, ' +
+  '세무전문가 검수를 거쳐 사업자에게 전달합니다.';
+
 export const metadata: Metadata = {
-  title: 'TaxBriefing — 공식 원문으로 확인한 세무 브리핑',
-  description:
-    '국세·지방세·노무·4대보험·지원사업 관련 공식 발표를 법령·관보 원문으로 확인하고, 세무전문가 검수를 거쳐 사업자에게 전달합니다.',
+  title: TITLE,
+  description: DESCRIPTION,
+  /*
+    **링크 미리보기.**
+
+    이 서비스는 텔레그램으로 배달된다. 사장님이 그 링크를 단톡방에
+    다시 던지는 일이 실제로 생기고, 그때 미리보기 이미지가 없으면
+    회색 상자에 주소만 뜬다. 카카오톡도 같은 규격을 읽는다.
+
+    app/opengraph-image.png 를 Next 가 알아서 물려 주지만, 제목과
+    설명은 여기서 명시해야 카드에 같이 나온다.
+  */
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: 'TaxBriefing',
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#f5f6f8',
+  themeColor: '#f2f4f6',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

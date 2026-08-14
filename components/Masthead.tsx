@@ -38,8 +38,8 @@ export function Masthead({ active }: { active?: Tab }) {
     <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-page items-center gap-1 px-4 pt-3">
         <Link href="/" className="flex shrink-0 items-center gap-2 pr-2 text-ink">
-          <Logo size={22} />
-          <span className="text-[17px] font-extrabold tracking-[-0.03em]">TaxBriefing</span>
+          <Logo size={28} />
+          <span className="text-[20px] font-extrabold tracking-[-0.035em]">TaxBriefing</span>
         </Link>
 
         <Link
