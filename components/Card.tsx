@@ -151,10 +151,48 @@ export function NewsCard({ item }: { item: NewsItem }) {
   );
 }
 
+/**
+ * 법령해석 한 건.
+ *
+ * **본문이 없다.** 법제처 API 가 목록만 주고 상세는 안 준다. 그래서
+ * 우리 상세 화면을 거치지 않고 원문으로 바로 보낸다 — 제목과 링크뿐인
+ * 화면을 한 번 더 열게 하는 것은 헛걸음이다.
+ *
+ * 다만 뉴스와 다르다. 국가기관이 낸 공식 해석이라 등급이 A 다.
+ * "확인 전" 이 아니라 "본문 미수록" 이라고 적는다 — 못 믿을 것이
+ * 아니라 우리가 안 담은 것이다.
+ */
+export function InterpretationCard({ item }: { item: PublicContentSummary }) {
+  return (
+    <a
+      href={item.source_url ?? '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="card-tap pad"
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="pill pill-good">공식 해석</span>
+        <span className="pill pill-calm">본문 미수록</span>
+      </div>
+
+      <h3 className="mt-2.5 line-clamp-2 max-w-reading text-card text-ink">
+        {item.title}
+        <span aria-hidden className="ml-1 text-[13px] font-normal text-ink-3">
+          ↗
+        </span>
+      </h3>
+
+      <p className="mt-2 text-meta text-ink-3">
+        {item.promulgation_date ? `${formatDate(item.promulgation_date)} 회신 · ` : ''}
+        국세법령정보시스템에서 원문 보기
+      </p>
+    </a>
+  );
+}
+
 /** 종류를 보고 알아서 고른다. 화면마다 분기를 반복하지 않는다. */
 export function ContentCard({ item }: { item: PublicContentSummary }) {
-  if (item.content_kind === 'TRIBUNAL' || item.content_kind === 'INTERPRETATION') {
-    return <TribunalCard item={item} />;
-  }
+  if (item.content_kind === 'INTERPRETATION') return <InterpretationCard item={item} />;
+  if (item.content_kind === 'TRIBUNAL') return <TribunalCard item={item} />;
   return <PolicyCard item={item} />;
 }

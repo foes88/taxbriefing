@@ -23,6 +23,7 @@ from app.domain.enums import CollectorType
 from app.models.tables import Source
 from app.services.collectors.assembly import AssemblyBillCollector
 from app.services.collectors.base import run_collection
+from app.services.collectors.interpretation import InterpretationCollector
 from app.services.collectors.law_go_kr import (
     AdmRulCollector,
     LawCollector,
@@ -42,6 +43,7 @@ ADAPTERS = {
     # 별개 canonical_url 을 쓰므로 서로 덮어쓰지 않는다.
     "law.go.kr": (LawCollector, AdmRulCollector, UpcomingLawCollector),
     "law.go.kr/조세심판원": (TaxTribunalCollector,),
+    "law.go.kr/법령해석": (InterpretationCollector,),
     "open.assembly.go.kr": (AssemblyBillCollector,),
     "openapi.naver.com": (NaverNewsCollector,),
 }

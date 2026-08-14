@@ -89,6 +89,13 @@ class PublicContentSummary(BaseModel):
     #: 화면이 제목에서 뽑아 쓰던 값이다. 수집기 버전에 따라 "— 기각" 과
     #: "(기각)" 이 섞이면서 결론 필터가 전부 0 이 됐다.
     outcome: str | None = None
+    #: 주 근거 원문 주소.
+    #:
+    #: 법령해석처럼 **본문이 없는 종류**는 화면이 우리 상세를 거치지 않고
+    #: 여기로 바로 보낸다. 제목과 링크뿐인 화면을 한 번 더 열게 하는 것은
+    #: 헛걸음이다. 다른 종류에는 붙이지 않는다 — 목록 한 번에 원문 조인을
+    #: 걸 이유가 없다.
+    source_url: str | None = None
     #: 달라지는 것이나 할 일이 하나라도 있는가.
     #:
     #: "먼저 볼 것"에 올릴지 판단하는 데 쓴다. 실질 변경이 없는 개정도
@@ -194,7 +201,9 @@ def _actionable(body: dict | None) -> bool:
     return bool(body.get("changes")) or bool(body.get("required_actions"))
 
 
-def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSummary:
+def _summary(
+    content: TaxContent, *, actionable: bool = True, source_url: str | None = None
+) -> PublicContentSummary:
     has_status = content.content_kind in KINDS_WITH_STATUS
     return PublicContentSummary(
         id=content.id,
@@ -216,6 +225,7 @@ def _summary(content: TaxContent, *, actionable: bool = True) -> PublicContentSu
         industry_labels=[industry.label(code) for code in (content.industries or [])],
         content_kind=content.content_kind,
         outcome=content.outcome,
+        source_url=source_url,
         actionable=actionable,
     )
 
@@ -468,8 +478,29 @@ def public_feed(
             ).scalars()
         }
 
+    # 본문 없는 종류(법령해석)만 원문 주소를 같이 싣는다. 화면이 우리
+    # 상세를 거치지 않고 바로 원문으로 보내야 하기 때문이다.
+    linkable = [c.id for c in contents if c.content_kind == ContentKind.INTERPRETATION.value]
+    urls: dict[UUID, str] = {}
+    if linkable:
+        urls = dict(
+            db.execute(
+                select(ContentSource.tax_content_id, RawContent.canonical_url)
+                .join(
+                    RawContentVersion,
+                    ContentSource.raw_content_version_id == RawContentVersion.id,
+                )
+                .join(RawContent, RawContentVersion.raw_content_id == RawContent.id)
+                .where(ContentSource.tax_content_id.in_(linkable))
+            ).all()
+        )
+
     items = [
-        _summary(c, actionable=_actionable(bodies.get(c.current_version_id)))
+        _summary(
+            c,
+            actionable=_actionable(bodies.get(c.current_version_id)),
+            source_url=urls.get(c.id),
+        )
         for c in contents
     ]
     next_cursor = str(offset + limit) if offset + limit < total else None

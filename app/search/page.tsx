@@ -26,6 +26,9 @@ const KINDS = [
   { key: 'ALL', label: '전체' },
   { key: 'POLICY', label: '법령' },
   { key: 'TRIBUNAL', label: '심판례' },
+  // 다투기 전에 물어본 답. 상담 중에 "이런 경우는 어떻게 되나요" 를
+  // 만나면 실무자가 먼저 찾는 것이 이것이다.
+  { key: 'INTERPRETATION', label: '해석' },
   { key: 'BILL', label: '국회 법안' },
   { key: 'NEWS', label: '뉴스' },
 ] as const;

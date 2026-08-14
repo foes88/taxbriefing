@@ -93,7 +93,7 @@ def _decide_risk(title: str, *, kind: str | None = None) -> RiskLevel:
     것에 할 일이 없고, 확정된 개정과 같은 표시를 달면 둘이 구분되지 않는다.
     실제로 아침 브리핑 6건이 전부 [중요] 법안으로 채워진 적이 있다.
     """
-    if kind == ContentKind.BILL.value:
+    if kind in (ContentKind.BILL.value, ContentKind.INTERPRETATION.value):
         return RiskLevel.LOW
     if any(p in title for p in _HIGH_RISK_PATTERNS):
         return RiskLevel.HIGH
@@ -194,12 +194,46 @@ def _bill_body(meta: dict) -> dict:
     }
 
 
+def _interpretation_body(meta: dict) -> dict:
+    """법령해석 본문.
+
+    **본문이 없다.** 법제처 API 는 목록만 JSON 으로 주고 상세는 HTML
+    안내 페이지를 준다. 우리가 가진 것은 안건명·안건번호·해석일자·링크뿐이다.
+
+    여기에 "달라지는 점" 이나 "할 일" 을 만들면 그건 지어내는 것이다.
+    가진 것만 적고 나머지는 원문에 맡긴다 — 제목이 이미 쟁점을 담고
+    있어서 그것만으로도 값이 있다. 있는 줄 몰라서 못 찾는 것과 알고
+    원문을 여는 것은 다르다.
+    """
+    agency = str(meta.get("agency") or "").strip()
+    case_no = str(meta.get("case_no") or "").strip()
+
+    changes: list[str] = []
+    if agency:
+        changes.append(f"해석기관: {agency}")
+    if case_no:
+        changes.append(f"안건번호: {case_no}")
+
+    return {
+        "changes": changes,
+        # 남의 질의에 대한 답이다. 우리 고객이 지금 할 일은 없다.
+        "required_actions": [],
+        "needs_expert": [
+            "본문은 국세법령정보시스템 원문에서 확인하세요. 이 항목은 해석이 "
+            "있다는 사실과 찾아갈 곳만 알려 드립니다 — 요지를 우리가 정리하지 "
+            "않았습니다."
+        ],
+    }
+
+
 def _build_body(raw: RawContent, version: RawContentVersion, meta: dict) -> dict:
     """화면에 보여줄 구조화 본문. 원문 필드와 원문 구획만 사용한다."""
     if meta.get("content_kind") == "TRIBUNAL_DECISION":
         return _tribunal_body(version, meta)
     if meta.get("content_kind") == "BILL":
         return _bill_body(meta)
+    if meta.get("content_kind") == "INTERPRETATION":
+        return _interpretation_body(meta)
 
     reasons = _extract_section(version.normalized_text, "제개정이유")
     revisions = _extract_section(version.normalized_text, "개정문")
@@ -242,6 +276,8 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
         return _tribunal_summary(meta)
     if meta.get("content_kind") == "BILL":
         return _bill_summary(meta)
+    if meta.get("content_kind") == "INTERPRETATION":
+        return _interpretation_summary(meta)
 
     name = raw.title
     revision = meta.get("revision_type") or "개정"
@@ -300,6 +336,22 @@ def _bill_summary(meta: dict) -> str:
         " 국회 심사 중이며 통과 여부는 정해지지 않았습니다."
     )
     return (head + "." + tail)[:250]
+
+
+def _interpretation_summary(meta: dict) -> str:
+    """법령해석 임시 문구.
+
+    **개정 어투를 쓰지 않는다.** 해석은 법을 바꾸는 것이 아니라 이미
+    있는 법을 어떻게 읽는지 답한 것이다.
+    """
+    agency = str(meta.get("agency") or "").strip() or "과세관청"
+    decided = _parse_iso(meta.get("decided_at"))
+
+    when = f" {decided.year}년 {decided.month}월 {decided.day}일 회신." if decided else ""
+    return (
+        f"{agency} 법령해석.{when} 본문은 원문에서 확인하세요 — "
+        "요지를 우리가 정리하지 않았습니다."
+    )[:250]
 
 
 def _decide_kind(meta: dict) -> str:
