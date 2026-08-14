@@ -158,6 +158,15 @@ class GroqUnfinishedJson(GroqError):
     길어지면 닫는 괄호에 닿기 전에 예산이 끝난다.
 
     **기다려도 안 되고 원문을 줄여도 안 된다.** 출력 예산을 늘려야 한다.
+
+    문구가 하나가 아니다. `validate` 로만 걸렀더니 소득세법 시행령이
+    이렇게 떨어졌다.
+
+        GroqError: GROQ HTTP 400: {"error":{"message":"Failed to
+        generate JSON. Please adjust your prompt. See 'failed_g
+
+    `generate` 와 `validate` 두 가지를 쓴다. 한쪽만 알아보면 나머지는
+    예산을 늘리는 사다리를 타지 못하고 원본 응답이 그대로 화면에 뜬다.
     """
 
     def __init__(self) -> None:
@@ -178,6 +187,15 @@ _TPD = re.compile(
     r"tokens per day \(TPD\).*?Limit\s+(\d+).*?Used\s+(\d+)", re.I | re.S
 )
 
+#: JSON 을 못 끝냈다는 400 본문.
+#:
+#: GROQ 는 `generate` 와 `validate` 두 문구를 쓰고, 어느 쪽이든 응답에
+#: `failed_generation` 필드를 붙인다. 셋 다 본다 — 문구 하나에 매달면
+#: 다음에 표현이 바뀔 때 또 원본 응답이 그대로 화면에 뜬다.
+_UNFINISHED = re.compile(
+    r"Failed to (generate|validate) JSON|failed_generation", re.I
+)
+
 
 def _daily_exhausted(response: httpx.Response) -> GroqDailyExhausted | None:
     """하루치를 다 쓴 429 인가.
@@ -189,6 +207,23 @@ def _daily_exhausted(response: httpx.Response) -> GroqDailyExhausted | None:
     if not match:
         return None
     return GroqDailyExhausted(used=int(match.group(2)), limit=int(match.group(1)))
+
+
+def _give_up(seen: dict[str, int]) -> str:
+    """재시도를 다 쓴 이유를 **일어난 대로** 적는다.
+
+    한 종류만 났으면 그것을 말하고, 섞였으면 섞였다고 말한다. 어느 쪽이
+    많았는지가 다음에 어디를 볼지 정하기 때문이다.
+    """
+    if not seen:
+        return f"GROQ 호출을 {MAX_RETRIES}번 시도했으나 끝내지 못했습니다."
+    tally = " · ".join(f"{name} {count}회" for name, count in seen.items())
+    if len(seen) == 1:
+        return f"GROQ {tally}로 {MAX_RETRIES}번 시도가 모두 실패했습니다."
+    return (
+        f"GROQ 재시도 {MAX_RETRIES}번을 다 썼습니다 ({tally}). "
+        "한 가지 원인이 아니므로 한도만 보지 말고 기록을 확인하세요."
+    )
 
 
 def _retry_after(response: httpx.Response) -> float | None:
@@ -255,10 +290,21 @@ class GroqProvider:
 
         429 는 분당 토큰 한도라 **기다리면** 풀린다. 서버가 Retry-After 를 주면 그 값을 따른다.
         413 은 요청 자체가 커서 나므로 기다려도 소용없다 — **원문을 줄여서** 다시 보낸다.
+
+        세 가지가 재시도 횟수를 함께 쓴다. 그래서 마지막 시도에서 무엇이
+        났는지만 보고 실패 사유를 적으면 거짓이 된다. 실제로 이렇게 떴다.
+
+            ! 소득세법 시행령: GROQ 분당 한도를 계속 초과합니다.
+
+        기록을 보면 분당 한도는 네 번 중 두 번이었고, 나머지 두 번은 JSON
+        미완성과 요청 과대였다. "계속 초과" 가 아니다. 어느 쪽을 파야 하는지
+        말해 주지 않는 메시지는 없느니만 못하다 — 지난번에도 같은 문장 하나로
+        하루를 엉뚱한 데 썼다. **일어난 것을 세어서 그대로 적는다.**
         """
         budget = MAX_DOC_CHARS
         # 출력 예산. JSON 을 못 닫으면 늘려서 다시 부른다.
         out_budget = MAX_OUTPUT_TOKENS
+        seen: dict[str, int] = {}
 
         for attempt in range(MAX_RETRIES):
             try:
@@ -266,6 +312,7 @@ class GroqProvider:
                     self._build_messages(request, budget), max_tokens=out_budget
                 )
             except GroqUnfinishedJson as exc:
+                seen["JSON 미완성"] = seen.get("JSON 미완성", 0) + 1
                 if out_budget >= MAX_OUTPUT_TOKENS_CEILING:
                     raise GroqError(
                         "출력 예산을 최대로 올려도 모델이 JSON 을 끝내지 못합니다. "
@@ -274,12 +321,14 @@ class GroqProvider:
                 out_budget = min(out_budget * 2, MAX_OUTPUT_TOKENS_CEILING)
                 logger.info("groq.grow_output", new_budget=out_budget)
             except GroqRateLimited as exc:
+                seen["분당 한도"] = seen.get("분당 한도", 0) + 1
                 if attempt == MAX_RETRIES - 1:
-                    raise GroqError("GROQ 분당 한도를 계속 초과합니다.") from exc
+                    raise GroqError(_give_up(seen)) from exc
                 wait = exc.retry_after or BACKOFF_SECONDS[attempt]
                 logger.info("groq.rate_limited", wait_seconds=wait, attempt=attempt + 1)
                 time.sleep(wait)
             except GroqTooLarge as exc:
+                seen["요청 과대"] = seen.get("요청 과대", 0) + 1
                 if budget <= 1500:
                     raise GroqError(
                         "원문을 최소 크기까지 줄여도 요청이 너무 큽니다."
@@ -287,7 +336,7 @@ class GroqProvider:
                 budget = budget // 2
                 logger.info("groq.shrink_input", new_budget=budget)
 
-        raise GroqError("GROQ 호출을 완료하지 못했습니다.")
+        raise GroqError(_give_up(seen))
 
     def _build_messages(
         self, request: AnalysisRequest, budget: int = MAX_DOC_CHARS
@@ -334,16 +383,18 @@ class GroqProvider:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
+        seen: dict[str, int] = {}
         for attempt in range(MAX_RETRIES):
             try:
                 return self._call(messages, max_tokens=max_tokens)
             except GroqRateLimited as exc:
+                seen["분당 한도"] = seen.get("분당 한도", 0) + 1
                 if attempt == MAX_RETRIES - 1:
-                    raise GroqError("GROQ 분당 한도를 계속 초과합니다.") from exc
+                    raise GroqError(_give_up(seen)) from exc
                 wait = exc.retry_after or BACKOFF_SECONDS[attempt]
                 logger.info("groq.rate_limited", wait_seconds=wait, attempt=attempt + 1)
                 time.sleep(wait)
-        raise GroqError("GROQ 호출을 완료하지 못했습니다.")
+        raise GroqError(_give_up(seen))
 
     def _call(
         self, messages: list[dict[str, str]], *, max_tokens: int = 2400
@@ -377,7 +428,7 @@ class GroqProvider:
             raise GroqRateLimited(_retry_after(response))
         if response.status_code == 413:
             raise GroqTooLarge()
-        if response.status_code == 400 and "Failed to validate JSON" in response.text:
+        if response.status_code == 400 and _UNFINISHED.search(response.text):
             raise GroqUnfinishedJson()
         if response.status_code >= 400:
             raise GroqError(f"GROQ HTTP {response.status_code}: {response.text[:300]}")

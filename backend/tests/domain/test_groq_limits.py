@@ -16,6 +16,7 @@ from app.services.ai.groq_provider import (
     GroqDailyExhausted,
     GroqProvider,
     _daily_exhausted,
+    _give_up,
     _retry_after,
 )
 from app.services.ai.provider import AnalysisRequest, SourceDocument
@@ -174,3 +175,94 @@ class TestUnfinishedJson:
         )
         with pytest.raises(GroqError, match="HTTP 400"):
             provider.analyze(_request())
+
+
+#: 실제로 소득세법 시행령이 떨어뜨린 응답. `validate` 가 아니라 `generate` 다.
+GENERATE_JSON_BODY = (
+    '{"error":{"message":"Failed to generate JSON. Please adjust your prompt. '
+    "See 'failed_generation'.\",\"type\":\"invalid_request_error\","
+    '"failed_generation":"{\\"one_line_summary\\": \\"소득세법 시행령이"}}'
+)
+
+
+class TestBothWordings:
+    """GROQ 는 `generate` 와 `validate` 를 섞어 쓴다.
+
+    `validate` 만 알아보게 해 뒀더니 소득세법 시행령이 예산 사다리를 타지
+    못하고 원본 응답 그대로 떨어졌다.
+
+        GroqError: GROQ HTTP 400: {"error":{"message":"Failed to
+        generate JSON. Please adjust your prompt. See 'failed_g
+    """
+
+    def test_generate_wording_also_grows_the_budget(self):
+        seen: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            import json as _json
+
+            seen.append(_json.loads(request.content)["max_tokens"])
+            if len(seen) == 1:
+                return httpx.Response(400, text=GENERATE_JSON_BODY)
+            return httpx.Response(200, json=_ok_payload())
+
+        _provider(handler).analyze(_request())
+        assert seen == [2_400, 4_800], "generate 문구도 예산을 올려 다시 불러야 한다"
+
+
+class TestGiveUpMessage:
+    """재시도를 다 썼을 때, 무엇 때문이었는지 **일어난 대로** 말한다.
+
+    세 가지 실패가 재시도 횟수를 함께 쓴다. 마지막 시도에서 난 것만 보고
+    적으면 거짓이 된다. 실제로 이렇게 떴다.
+
+        ! 소득세법 시행령: GROQ 분당 한도를 계속 초과합니다.
+
+    기록을 보면 분당 한도는 두 번이었고 나머지는 JSON 미완성과 요청
+    과대였다. 어디를 파야 하는지 안 알려주는 메시지는 없느니만 못하다.
+    """
+
+    def test_one_cause_is_named_plainly(self):
+        assert _give_up({"분당 한도": 4}) == "GROQ 분당 한도 4회로 4번 시도가 모두 실패했습니다."
+
+    def test_mixed_causes_are_all_listed(self):
+        message = _give_up({"분당 한도": 2, "JSON 미완성": 1, "요청 과대": 1})
+        assert "분당 한도 2회" in message
+        assert "JSON 미완성 1회" in message
+        assert "요청 과대 1회" in message
+        assert "계속 초과" not in message, "한 가지 원인이었던 것처럼 말하면 안 된다"
+
+    def test_no_recorded_cause_does_not_invent_one(self):
+        """센 것이 없으면 없다고 한다. 모르는 값은 비워 둔다."""
+        message = _give_up({})
+        assert "한도" not in message
+        assert "4번" in message
+
+    def test_the_real_sequence_does_not_blame_the_rate_limit(self, monkeypatch):
+        """소득세법 시행령이 실제로 밟은 순서 그대로 돌려 본다.
+
+        분당 한도 → JSON 미완성 → 요청 과대 → 분당 한도.
+        마지막이 429 라고 "분당 한도를 계속 초과" 로 끝나면 안 된다.
+        """
+        from app.services.ai import groq_provider
+
+        # 서버가 9.5초를 기다리라고 한다. 시험에서 진짜로 기다릴 이유는 없다.
+        monkeypatch.setattr(groq_provider.time, "sleep", lambda _: None)
+
+        replies = [
+            httpx.Response(429, text=MINUTE_BODY),
+            httpx.Response(400, text=GENERATE_JSON_BODY),
+            httpx.Response(413, text="too large"),
+            httpx.Response(429, text=MINUTE_BODY),
+        ]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return replies.pop(0)
+
+        with pytest.raises(groq_provider.GroqError) as caught:
+            _provider(handler).analyze(_request())
+
+        message = str(caught.value)
+        assert "분당 한도 2회" in message
+        assert "JSON 미완성 1회" in message
+        assert "요청 과대 1회" in message
