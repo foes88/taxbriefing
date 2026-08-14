@@ -9,6 +9,7 @@ name: 매일 브리핑
 # 필요한 시크릿 (Settings → Secrets and variables → Actions)
 #   TAXBRIEFING_DATABASE_URL        필수. postgresql+psycopg://... (드라이버 접두어 포함)
 #   TAXBRIEFING_LAW_API_OC          없으면 법령 수집만 건너뛴다
+#   TAXBRIEFING_LAWMAKING_OC        없으면 입법예고 수집만 건너뛴다
 #   TAXBRIEFING_AI_API_KEY          없으면 요약·분류만 건너뛴다
 #   TAXBRIEFING_NAVER_CLIENT_ID     없으면 뉴스 수집만 건너뛴다
 #   TAXBRIEFING_NAVER_CLIENT_SECRET
@@ -43,6 +44,8 @@ env:
   TAXBRIEFING_AI_MODEL: openai/gpt-oss-120b
   TAXBRIEFING_AI_API_KEY: ${{ secrets.TAXBRIEFING_AI_API_KEY }}
   TAXBRIEFING_ASSEMBLY_API_KEY: ${{ secrets.TAXBRIEFING_ASSEMBLY_API_KEY }}
+  # 국민참여입법센터. 없으면 입법예고 수집만 건너뛴다.
+  TAXBRIEFING_LAWMAKING_OC: ${{ secrets.TAXBRIEFING_LAWMAKING_OC }}
   TAXBRIEFING_NAVER_CLIENT_ID: ${{ secrets.TAXBRIEFING_NAVER_CLIENT_ID }}
   TAXBRIEFING_NAVER_CLIENT_SECRET: ${{ secrets.TAXBRIEFING_NAVER_CLIENT_SECRET }}
   TAXBRIEFING_TELEGRAM_BOT_TOKEN: ${{ secrets.TAXBRIEFING_TELEGRAM_BOT_TOKEN }}

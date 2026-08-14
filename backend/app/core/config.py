@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     # 공포된 법령만 보면 이미 늦다 — 이게 "남보다 먼저"의 앞쪽 절반이다.
     assembly_api_key: str | None = None
 
+    # 국민참여입법센터 (lawmaking.go.kr). **가장 이른 신호**다.
+    #
+    # 정부가 "이렇게 바꾸겠다" 고 내놓고 의견을 받는 40일이 여기 있다.
+    # 공포된 뒤에 아는 사람과 예고 단계에서 아는 사람은 고객에게 할 말이
+    # 다르다.
+    #
+    # 법제처 OC 와 **다른 계정**이다. 국민참여입법센터에 따로 가입하고
+    # 정보공개 신청을 승인받아야 하며, 값은 그 계정 ID 의 @ 앞부분이다.
+    lawmaking_oc: str | None = None
+
     # 텔레그램 발송 (ADR-001 — 알림 채널).
     # 비밀키는 DB 에 저장하지 않는다 (§12.1). 환경변수·.env 에서만 읽는다.
     telegram_bot_token: str | None = None

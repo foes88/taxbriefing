@@ -31,6 +31,7 @@ from app.services.collectors.law_go_kr import (
     UpcomingLawCollector,
 )
 from app.services.collectors.naver_news import NaverNewsCollector
+from app.services.collectors.preannounce import PreannounceCollector
 from app.services.collectors.rss import RssCollector
 from app.services.collectors.tribunal import TaxTribunalCollector
 
@@ -44,6 +45,7 @@ ADAPTERS = {
     "law.go.kr": (LawCollector, AdmRulCollector, UpcomingLawCollector),
     "law.go.kr/조세심판원": (TaxTribunalCollector,),
     "law.go.kr/법령해석": (InterpretationCollector,),
+    "lawmaking.go.kr": (PreannounceCollector,),
     "open.assembly.go.kr": (AssemblyBillCollector,),
     "openapi.naver.com": (NaverNewsCollector,),
 }
