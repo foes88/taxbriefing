@@ -40,6 +40,7 @@ from app.models.tables import (
     RawContent,
     RawContentVersion,
     Source,
+    TaxContent,
     User,
 )
 from app.services import content as content_service
@@ -251,6 +252,34 @@ def _summary(raw: RawContent, meta: dict, effective: dt.date | None) -> str:
     return f"「{name}」이(가) {revision}되어 {when}."[:250]
 
 
+def _refresh_bill(db: Session, content_id: UUID, meta: dict) -> int:
+    """이미 있는 법안의 상태·요약을 국회가 준 값으로 맞춘다.
+
+    바뀐 게 없으면 아무것도 하지 않는다 — 매번 updated_at 을 건드리면
+    목록 정렬(최신순)이 흔들려서, 아무 일도 없던 법안이 오늘 뭔가
+    생긴 것처럼 맨 위로 올라온다.
+    """
+    content = db.get(TaxContent, content_id)
+    if content is None:
+        return 0
+
+    status = str(meta.get("legal_status") or "").strip()
+    if status not in LegalStatus.__members__:
+        return 0
+
+    fresh = LegalStatus[status]
+    if content.legal is fresh:
+        return 0
+
+    content.legal = fresh
+    content.one_line_summary = _bill_summary(meta)
+    # 바로 흘려보낸다. 초안 생성은 건별로 커밋하는데 이 경로는 새 콘텐츠를
+    # 만들지 않아 그 커밋을 타지 않는다. 흘려두지 않으면 다음 조회가
+    # 예전 값을 읽어 가고, 바꾼 것이 조용히 사라진다.
+    db.flush()
+    return 1
+
+
 def _bill_summary(meta: dict) -> str:
     """법안 임시 문구. **확정 어투를 쓰지 않는다.**
 
@@ -335,7 +364,7 @@ def run(
         .order_by(RawContent.published_at.desc().nullslast())
     ).all()
 
-    stats = {"검토": 0, "건너뜀": 0, "초안": 0, "게시": 0, "실패": 0}
+    stats = {"검토": 0, "건너뜀": 0, "초안": 0, "게시": 0, "상태 갱신": 0, "실패": 0}
 
     for raw, version, _source in rows:
         if stats["초안"] >= limit:
@@ -385,6 +414,20 @@ def run(
             .limit(1)
         ).scalar_one_or_none()
         if exists is not None:
+            # **법안은 상태만 따로 갱신한다.**
+            #
+            # 법안은 한 번 만들고 끝이 아니다. 국회에서 심사가 진행되면
+            # PROC_RESULT 가 바뀌는데, "이미 있으면 건너뜀" 만 하면 통과한
+            # 법안이 영원히 "발의" 로 남는다.
+            #
+            # 통과 안 된 것이 "통과" 로 보이면 안 해도 될 준비를 하고,
+            # 통과한 것이 "발의" 로 남으면 해야 할 준비를 놓친다. 뒤쪽이
+            # 더 나쁘다 — 모르는 사이에 시행일이 온다.
+            #
+            # 법령은 갱신하지 않는다. 본문이 바뀌면 새 원문이 되고 그건
+            # 검수를 다시 거쳐야 하는 일이라, 여기서 조용히 바꿀 것이 아니다.
+            if _decide_kind(meta) == ContentKind.BILL.value:
+                stats["상태 갱신"] += _refresh_bill(db, exists, meta)
             stats["건너뜀"] += 1
             continue
 
@@ -503,7 +546,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"\n검토 {stats['검토']} · 초안 {stats['초안']} · 게시 {stats['게시']} "
-        f"· 건너뜀 {stats['건너뜀']} · 실패 {stats['실패']}"
+        # 법안 상태가 바뀐 건수. 조용히 바꾸면 "왜 발의가 통과로 바뀌었지"
+        # 를 나중에 되짚을 수 없다.
+        + (f"· 상태 갱신 {stats['상태 갱신']} " if stats["상태 갱신"] else "")
+        + f"· 건너뜀 {stats['건너뜀']} · 실패 {stats['실패']}"
     )
     if not args.auto_approve and stats["초안"]:
         print("\n초안까지 생성했습니다. 검수자 계정으로 승인·게시하세요.")

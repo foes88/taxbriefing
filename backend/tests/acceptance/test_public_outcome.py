@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.domain.enums import AuthorityGrade, ContentKind, WorkflowStatus
 from app.services import content as content_service
@@ -207,3 +208,83 @@ class TestBulkDraftIdempotency:
             today=dt.date(2026, 8, 13),
         )
         assert again["초안"] == 0, "같은 원문에서 콘텐츠가 또 만들어졌다"
+
+
+@requires_db
+class TestBillStatusRefresh:
+    """법안은 한 번 만들고 끝이 아니다.
+
+    국회에서 심사가 진행되면 PROC_RESULT 가 바뀐다. "이미 있으면 건너뜀"
+    만 하면 통과한 법안이 영원히 "발의" 로 남는다.
+
+    통과 안 된 것이 "통과" 로 보이면 안 해도 될 준비를 하고, 통과한 것이
+    "발의" 로 남으면 해야 할 준비를 놓친다. 뒤쪽이 더 나쁘다 — 모르는
+    사이에 시행일이 온다.
+    """
+
+    def _collect_once(self, db, source, make_raw_version, *, url, proc_result, status):
+        import datetime as dt
+
+        from app import bulk_draft
+        from app.models.tables import RawContent
+
+        version = make_raw_version(source, url=url, title="소득세법 일부개정법률안")
+        raw = db.get(RawContent, version.raw_content_id)
+        raw.published_at = dt.datetime(2026, 8, 1, tzinfo=dt.UTC)
+        version.doc_metadata = {
+            "content_kind": "BILL",
+            "proposer": "홍길동의원 등 10인",
+            "committee": "재정경제기획위원회",
+            "proposed_at": "2026-08-01",
+            "proc_result": proc_result,
+            "legal_status": status,
+        }
+        db.flush()
+        return bulk_draft.run(
+            db, months=None, year=None, limit=10, auto_approve=False,
+            today=dt.date(2026, 8, 14),
+        )
+
+    def test_passed_bill_stops_saying_proposed(self, db, make_source, make_raw_version):
+        from app.domain.enums import LegalStatus
+        from app.models.tables import TaxContent
+
+        source = make_source(AuthorityGrade.A)
+        url = "https://likms.assembly.go.kr/bill/2220444"
+
+        first = self._collect_once(
+            db, source, make_raw_version, url=url, proc_result="", status="BILL_PROPOSED"
+        )
+        assert first["초안"] == 1
+
+        content = db.execute(select(TaxContent)).scalars().one()
+        assert content.legal is LegalStatus.BILL_PROPOSED
+
+        # 같은 법안을 다시 수집한다. 이번에는 본회의를 통과했다.
+        again = self._collect_once(
+            db, source, make_raw_version, url=url,
+            proc_result="원안가결", status="ASSEMBLY_PASSED",
+        )
+        assert again["초안"] == 0, "같은 법안에서 콘텐츠가 또 만들어졌다"
+        assert again["상태 갱신"] == 1
+
+        db.refresh(content)
+        assert content.legal is LegalStatus.ASSEMBLY_PASSED
+        assert "발의" in (content.one_line_summary or "")
+
+    def test_unchanged_status_is_left_alone(self, db, make_source, make_raw_version):
+        """바뀐 게 없으면 건드리지 않는다.
+
+        매번 updated_at 을 건드리면 목록 정렬(최신순)이 흔들려서, 아무
+        일도 없던 법안이 오늘 뭔가 생긴 것처럼 맨 위로 올라온다.
+        """
+        source = make_source(AuthorityGrade.A)
+        url = "https://likms.assembly.go.kr/bill/2220456"
+
+        self._collect_once(
+            db, source, make_raw_version, url=url, proc_result="", status="BILL_PROPOSED"
+        )
+        again = self._collect_once(
+            db, source, make_raw_version, url=url, proc_result="", status="BILL_PROPOSED"
+        )
+        assert again["상태 갱신"] == 0
