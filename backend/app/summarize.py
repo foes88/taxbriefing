@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
-from app.domain.enums import ContentKind
+from app.domain.enums import ContentKind, LegalStatus
 from app.domain.industry import is_internal_document
 from app.models.tables import ContentSource, ContentVersion, TaxContent
 from app.services.ai import runner
@@ -141,6 +141,30 @@ def run(
         # 원문 대신 그 짧은 요약을 쓰고, 심판례 본문의 쟁점 단어가
         # 검색에서 사라진다.
         if content.content_kind in KINDS_WITHOUT_AI:
+            stats["건너뜀"] += 1
+            continue
+
+        # **입법예고도 돌리지 않는다. 종류가 아니라 상태로 걸러야 한다.**
+        #
+        # 입법예고의 content_kind 는 POLICY 다 — 결국 법령이 될 것이기
+        # 때문이다. 그래서 위의 종류 목록을 그냥 통과했고, 배치가 15건을
+        # 전부 덮어썼다. 우리가 써 둔 문장은 이것이었다.
+        #
+        #     의견 제출은 2026년 8월 20일까지입니다.
+        #
+        # 모델이 바꿔 놓은 문장은 이것이다.
+        #
+        #     법인세법 일부개정법률안이 입법예고 단계에 있으며, 아직
+        #     구체적인 내용이 공개되지 않아 사업자에게 변동 사항이 없습니다.
+        #
+        # 두 가지가 잘못됐다. 내용은 **공개돼 있다** — 첨부 원문에 있다.
+        # 우리가 안 읽었을 뿐이고 그건 모델이 알 수 없는 사정이다. 그리고
+        # 이 항목의 유일한 실행 정보인 **마감 날짜가 사라졌다.**
+        #
+        # 우리가 모델에게 준 것은 제목·부처·기간뿐이다. 그것만 주고
+        # 요지를 쓰라고 하면 지어낸다. 해석례·판례에서 이미 정한 규칙이
+        # 여기에도 그대로 적용된다 — 본문이 없으면 AI 를 쓰지 않는다.
+        if content.legal is LegalStatus.PREANNOUNCED:
             stats["건너뜀"] += 1
             continue
 

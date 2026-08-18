@@ -50,6 +50,8 @@ export interface PublicContentSummary {
   /** 공포일. 목록의 월 묶음이 이 값 기준이라 화면에도 같이 보여준다. */
   promulgation_date: string | null;
   application_end: string | null;
+  /** 의견 제출 마감 (입법예고만). 화면이 오늘 기준으로 며칠 남았는지 센다. */
+  comment_deadline?: string | null;
   corrected: boolean;
   updated_at: string;
   /** 업종 코드. 상담 참고용 색인이지 적용 판정이 아니다. */
@@ -258,6 +260,8 @@ export interface AdminContent {
   effective_date: string | null;
   application_start: string | null;
   application_end: string | null;
+  /** 의견 제출 마감 (입법예고만). 화면이 오늘 기준으로 며칠 남았는지 센다. */
+  comment_deadline?: string | null;
   source_confidence: number;
   confidence_breakdown: {
     total?: number;

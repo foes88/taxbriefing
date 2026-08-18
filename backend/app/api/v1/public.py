@@ -101,6 +101,11 @@ class PublicContentSummary(BaseModel):
     #: "먼저 볼 것"에 올릴지 판단하는 데 쓴다. 실질 변경이 없는 개정도
     #: 기록으로는 남겨야 하지만, 오늘 먼저 볼 것은 아니다.
     actionable: bool = True
+    #: 의견 제출 마감 (입법예고만).
+    #:
+    #: 화면이 오늘 기준으로 며칠 남았는지 센다. 요약 문장에만 두면
+    #: 기한이 지난 뒤에도 「8월 20일까지입니다」 가 그대로 떠 있는다.
+    comment_deadline: dt.date | None = None
 
 
 class PublicContentDetail(PublicContentSummary):
@@ -201,8 +206,23 @@ def _actionable(body: dict | None) -> bool:
     return bool(body.get("changes")) or bool(body.get("required_actions"))
 
 
+def _comment_deadline(body: dict | None) -> dt.date | None:
+    """입법예고의 의견 제출 마감. 없으면 None — 없는 날짜를 만들지 않는다."""
+    raw = (body or {}).get("comment_deadline")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return dt.date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
 def _summary(
-    content: TaxContent, *, actionable: bool = True, source_url: str | None = None
+    content: TaxContent,
+    *,
+    actionable: bool = True,
+    source_url: str | None = None,
+    body: dict | None = None,
 ) -> PublicContentSummary:
     has_status = content.content_kind in KINDS_WITH_STATUS
     return PublicContentSummary(
@@ -227,6 +247,7 @@ def _summary(
         outcome=content.outcome,
         source_url=source_url,
         actionable=actionable,
+        comment_deadline=_comment_deadline(body),
     )
 
 
@@ -504,6 +525,7 @@ def public_feed(
             c,
             actionable=_actionable(bodies.get(c.current_version_id)),
             source_url=urls.get(c.id),
+            body=bodies.get(c.current_version_id),
         )
         for c in contents
     ]
@@ -656,7 +678,7 @@ def public_content(content_id: UUID, db: DbSession) -> PublicContentDetail:
     body = _body_of(db, content)
     detail = PublicContentDetail(
         # promulgation_date 는 요약에 이미 들어 있다.
-        **_summary(content, actionable=_actionable(body)).model_dump(),
+        **_summary(content, actionable=_actionable(body), body=body).model_dump(),
         announcement_date=content.announcement_date,
         application_start=content.application_start,
         body=body,

@@ -106,14 +106,49 @@ export function PolicyCard({ item }: { item: PublicContentSummary }) {
         제목이 요약에 들어 있으면 요약을 버리는 규칙 때문에 이 문장이
         한동안 화면에서 사라져 있었다.
       */}
-      {preannounced && item.one_line_summary ? (
-        <p className="mt-2 text-meta font-bold text-ink-2">{item.one_line_summary}</p>
-      ) : null}
+      {preannounced ? <CommentWindow item={item} /> : null}
 
       {item.status_caveat ? (
         <p className="mt-2 text-meta font-semibold text-warn">{item.status_caveat}</p>
       ) : null}
     </Link>
+  );
+}
+
+/**
+ * 의견 제출 기간.
+ *
+ * **날짜만 적어 두면 지난 기한이 앞으로의 기한처럼 읽힌다.** 8월 20일이
+ * 지난 뒤에도 「의견 제출은 8월 20일까지입니다」 가 그대로 떠 있으면,
+ * 아직 낼 수 있는 줄 알고 열어 본다. 오늘을 기준으로 다시 센다.
+ *
+ * 마감이 지난 것을 화면에서 지우지는 않는다. 예고가 있었다는 사실은
+ * 남아야 한다 — 곧 공포될 것이기 때문이다. 다만 "낼 수 있다" 고
+ * 말하지 않을 뿐이다.
+ */
+function CommentWindow({ item }: { item: PublicContentSummary }) {
+  const days = daysUntil(item.comment_deadline);
+
+  // 마감일을 서버가 안 줬으면 요약 문장을 그대로 쓴다. 없는 날짜를
+  // 만들지 않는다 — 모르면 비워 두는 것이 규칙이다.
+  if (days === null) {
+    return item.one_line_summary ? (
+      <p className="mt-2 text-meta font-bold text-ink-2">{item.one_line_summary}</p>
+    ) : null;
+  }
+
+  if (days < 0) {
+    return <p className="mt-2 text-meta font-bold text-ink-3">의견 제출 기간이 끝났습니다</p>;
+  }
+
+  const label = days === 0 ? '오늘까지' : `${days}일 남음`;
+  return (
+    <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-meta">
+      <span className={`font-bold ${days <= 7 ? 'text-danger' : 'text-ink-2'}`}>
+        의견 제출 {label}
+      </span>
+      <span className="tabular text-ink-3">{formatDate(item.comment_deadline)}까지</span>
+    </p>
   );
 }
 
