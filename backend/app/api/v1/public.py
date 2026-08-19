@@ -24,6 +24,7 @@ from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain import industry, tax_calendar
 from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
 from app.domain.news_topic import LIKE_PATTERNS
+from app.domain.share import build_share_text
 from app.models.tables import (
     ContentEvidence,
     ContentSource,
@@ -115,6 +116,13 @@ class PublicContentDetail(PublicContentSummary):
     promulgation_date: dt.date | None = None
     application_start: dt.date | None = None
     body: dict = Field(default_factory=dict)
+    #: 사장님에게 그대로 보낼 짧은 글.
+    #:
+    #: 세무사무소 직원이 이 화면을 보고 고객에게 카톡으로 옮겨 적는다.
+    #: 그 옮겨 적는 일을 대신한다. **여기서 모델을 다시 돌리지 않는다** —
+    #: 검수를 통과한 문장을 검수 안 거친 문장으로 바꿔서 우리 화면보다
+    #: 더 멀리 보내는 셈이 된다. 고르고 자르기만 한다.
+    share_text: str = ""
     sources: list[PublicSourceOut] = Field(default_factory=list)
     evidence_fields: list[str] = Field(default_factory=list)
     reviewed: bool = True
@@ -676,13 +684,23 @@ def public_content(content_id: UUID, db: DbSession) -> PublicContentDetail:
         raise NotFoundError("콘텐츠를 찾을 수 없습니다.", {"content_id": str(content_id)})
 
     body = _body_of(db, content)
+    sources = _sources_of(db, content)
     detail = PublicContentDetail(
         # promulgation_date 는 요약에 이미 들어 있다.
         **_summary(content, actionable=_actionable(body), body=body).model_dump(),
         announcement_date=content.announcement_date,
         application_start=content.application_start,
         body=body,
-        sources=_sources_of(db, content),
+        share_text=build_share_text(
+            title=content.title,
+            summary=content.one_line_summary,
+            body=body,
+            effective_date=content.effective_date,
+            comment_deadline=_comment_deadline(body),
+            preannounced=content.legal is LegalStatus.PREANNOUNCED,
+            source_url=sources[0].url if sources else None,
+        ),
+        sources=sources,
         evidence_fields=_evidence_fields_of(db, content),
     )
     return detail

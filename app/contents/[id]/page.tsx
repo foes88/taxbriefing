@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Comparison, readComparison } from '@/components/Comparison';
 import { Block, DateRow, FactGrid, InfoRow, SourceList } from '@/components/DetailParts';
 import { Masthead } from '@/components/Masthead';
+import { ShareCard } from '@/components/ShareCard';
 import { TribunalArticle } from '@/components/TribunalArticle';
 import { ApiRequestError, publicApi } from '@/lib/api';
 import { daysUntil, effectiveLabel, formatDateTime, stripRevisionSuffix } from '@/lib/format';
@@ -83,6 +84,16 @@ export default async function ContentDetailPage({
           </div>
 
           <aside className="flex w-full flex-col gap-3 lg:sticky lg:top-24 lg:w-[19rem] lg:shrink-0">
+            {/*
+              옆칸의 맨 위. 넓은 화면에서는 본문과 나란히 붙어 있고,
+              좁은 화면에서는 본문을 다 읽은 뒤에 나온다.
+
+              좁은 화면에서 위로 올리지 않았다. 읽고 나서 보내는 순서가
+              맞다 — 무엇을 보내는지 모른 채 복사부터 하면, 사무소를 떠난
+              뒤에는 고칠 방법이 없다.
+            */}
+            <ShareCard text={content.share_text ?? ''} />
+
             <section className="card pad">
               <h2 className="section-title">{tribunal ? '사건 정보' : '주요 일자'}</h2>
               <dl className="mt-2 divide-y divide-line">

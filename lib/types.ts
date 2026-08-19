@@ -143,6 +143,8 @@ export interface PublicContentDetail extends PublicContentSummary {
   promulgation_date: string | null;
   application_start: string | null;
   body: Record<string, unknown>;
+  /** 사장님에게 그대로 보낼 짧은 글. 서버가 만든다. */
+  share_text?: string;
   sources: PublicSource[];
   evidence_fields: string[];
   reviewed: boolean;
