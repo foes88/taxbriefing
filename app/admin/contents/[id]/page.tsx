@@ -127,7 +127,16 @@ export default function ContentEditorPage() {
       }
       await adminApi.review(id, {
         decision: 'APPROVE',
-        review_note: note || '원문 대조 확인 완료',
+        // 메모를 안 적었다고 「원문 대조 확인 완료」 로 적지 않는다.
+        //
+        // 클릭 한 번을 "원문과 대조했다" 로 바꿔 적는 셈이다. 이 기록은
+        // 나중에 "이 건 누가 확인했나" 를 되짚는 유일한 근거인데, 거기서
+        // 거짓이 나오면 나머지 기록도 못 믿게 된다. 실제로 자동 승인
+        // 303건이 같은 문구로 남아 있어서 사람이 본 것처럼 읽혔다.
+        //
+        // 무엇을 봤는지는 checked_source_version_ids 가 이미 남긴다.
+        // 여기서는 메모가 없다는 사실만 적는다.
+        review_note: note.trim() || '검수자가 화면에서 승인. 별도 메모 없음.',
         checked_source_version_ids: Array.from(checked),
         legal_status: legal,
         risk_level: risk,
