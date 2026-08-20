@@ -144,4 +144,98 @@ def build_share_text(
     return "\n".join(lines)
 
 
-__all__ = ["DISCLAIMER", "MAX_LEAD", "MAX_TARGET", "build_share_text"]
+
+
+
+#: 제목 끝의 개정 구분. 「고용보험법 (일부개정, 2026-09-18 시행예정)」.
+#:
+#: 실무자 화면에서는 이게 정보다 — 같은 법의 개정이 여럿이라 구분이 된다.
+#: 사장님한테 보내는 글에서는 아니다. 바로 뒤에 「2026년 9월 18일 시행」 을
+#: 다시 적으므로 같은 날짜가 두 번 나오고, 괄호 안이 길어서 줄이 넘어간다.
+_REVISION_SUFFIX = re.compile(
+    r"\s*\((?:전부개정|일부개정|타법개정|제정|폐지)[^)]*\)\s*$"
+)
+
+
+def _law_name(title: str) -> str:
+    return _REVISION_SUFFIX.sub("", title).strip()
+
+
+def _dday(days: int) -> str:
+    """D-day. 오늘이면 「오늘」, 지난 것은 애초에 넣지 않는다."""
+    if days == 0:
+        return "오늘"
+    if days == 1:
+        return "내일"
+    return f"{days}일 뒤"
+
+
+def build_deadline_text(
+    *,
+    today: dt.date,
+    deadlines: list[dict],
+    changes: list[dict] | None = None,
+    audience_label: str | None = None,
+) -> str:
+    """카톡으로 돌릴 「챙기실 것」 한 장.
+
+    **업종별로 못 만든다. 아직은.**
+
+    사장님 대부분이 음식점이라 요식업만 골라 보내면 좋겠는데, 콘텐츠
+    325건 중 278건이 업종 미분류다. 「요식·음식점」 으로 잡힌 것은 0건이다.
+    골라낼 것이 없는데 골라낸 척하면 빈 안내가 나간다.
+
+    그래서 업종이 아니라 **마감 일정**으로 만든다. 이건 음식점이든
+    학원이든 똑같이 걸리고, 날짜가 법에 정해져 있어 지어낼 여지가 없다.
+    사장님이 실제로 물어보는 것도 "언제까지 뭘 내야 하나" 다.
+
+    대상(개인사업자·법인·직원 있는 사업장)은 항목마다 적는다. 거르지
+    않는다 — 「나는 법인이 아니니까 이건 아니구나」 를 사장님이 직접
+    확인하는 편이, 우리가 잘못 걸러서 하나를 빠뜨리는 것보다 낫다.
+    """
+    lines = [f"[사장님 안내] {today.month}월 챙기실 것"]
+    if audience_label:
+        lines.append(f"({audience_label} 기준)")
+
+    if deadlines:
+        lines += ["", "■ 신고·납부 마감"]
+        for item in deadlines:
+            date = dt.date.fromisoformat(str(item["date"]))
+            left = (date - today).days
+            head = f"· {date.month}월 {date.day}일 ({_dday(left)}) {item['title']}"
+            lines.append(head)
+            who = str(item.get("audience_label") or "").strip()
+            if who:
+                lines.append(f"    대상: {who}")
+
+    if changes:
+        lines += ["", "■ 새로 정해진 것"]
+    for change in changes or []:
+        title = str(change.get("title") or "").strip()
+        when = change.get("effective_date")
+        if not title:
+            continue
+        line = f"· {_law_name(title)}"
+        if when:
+            date = dt.date.fromisoformat(str(when))
+            line += f" — {date.year}년 {date.month}월 {date.day}일 시행"
+        lines.append(line)
+
+    if len(lines) <= 2:
+        return ""
+
+    lines += [
+        "",
+        "※ 일반적인 일정입니다. 과세유형·결산월·반기납부 여부에 따라 "
+        "달라질 수 있으니 담당자에게 확인하세요.",
+    ]
+    return "\n".join(lines)
+
+
+__all__ = [
+    "DISCLAIMER",
+    "MAX_LEAD",
+    "MAX_TARGET",
+    "build_deadline_text",
+    "build_share_text",
+]

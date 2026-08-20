@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import ClassVar
 
 from app.domain.share import DISCLAIMER, MAX_LEAD, build_share_text
 
@@ -169,3 +170,70 @@ class TestOwnerDigest:
         from app.services.render.telegram import render_owner_digest
 
         assert render_owner_digest([], today=dt.date(2026, 8, 20)) == ""
+
+
+class TestDeadlinePlan:
+    """카톡으로 돌릴 「이번 달 챙기실 것」.
+
+    업종별로 못 만든다 — 콘텐츠 325건 중 278건이 업종 미분류이고
+    「요식·음식점」 으로 잡힌 것은 0건이다. 골라낼 것이 없는데 골라낸
+    척하면 빈 안내가 나간다. 마감 일정은 음식점이든 학원이든 똑같이
+    걸리고, 날짜가 법에 정해져 있어 지어낼 여지가 없다.
+    """
+
+    DEADLINES: ClassVar[list[dict]] = [
+        {"date": "2026-08-31", "title": "법인세 중간예납", "audience_label": "법인"},
+        {"date": "2026-09-10", "title": "원천세 신고·납부", "audience_label": "직원 있는 사업장"},
+    ]
+    TODAY: ClassVar[dt.date] = dt.date(2026, 8, 20)
+
+    def _build(self, **kw):
+        from app.domain.share import build_deadline_text
+
+        base = {"today": self.TODAY, "deadlines": self.DEADLINES}
+        base.update(kw)
+        return build_deadline_text(**base)
+
+    def test_counts_the_days_from_today(self):
+        assert "8월 31일 (11일 뒤) 법인세 중간예납" in self._build()
+
+    def test_today_and_tomorrow_are_said_in_words(self):
+        rows = [{"date": "2026-08-20", "title": "가", "audience_label": "법인"},
+                {"date": "2026-08-21", "title": "나", "audience_label": "법인"}]
+        out = self._build(deadlines=rows)
+        assert "(오늘) 가" in out
+        assert "(내일) 나" in out
+
+    def test_who_it_applies_to_is_written_not_filtered(self):
+        """거르지 않는다.
+
+        「나는 법인이 아니니까 이건 아니구나」 를 사장님이 직접 확인하는
+        편이, 우리가 잘못 걸러서 하나를 빠뜨리는 것보다 낫다.
+        """
+        out = self._build()
+        assert "대상: 법인" in out
+        assert "대상: 직원 있는 사업장" in out
+
+    def test_revision_suffix_is_stripped_from_law_names(self):
+        """제목을 그대로 쓰면 같은 날짜가 두 번 나온다.
+
+            · 고용보험법 (일부개정, 2026-09-18 시행예정) — 2026년 9월 18일 시행
+        """
+        out = self._build(
+            changes=[
+                {
+                    "title": "고용보험법 (일부개정, 2026-09-18 시행예정)",
+                    "effective_date": "2026-09-18",
+                }
+            ]
+        )
+        assert "· 고용보험법 — 2026년 9월 18일 시행" in out
+        assert "시행예정)" not in out
+
+    def test_always_says_it_may_differ(self):
+        """과세유형·결산월·반기납부에 따라 기한이 다르다. 그걸 안 적으면 거짓이다."""
+        assert "담당자에게 확인하세요" in self._build()
+
+    def test_nothing_to_say_is_empty(self):
+        """빈 껍데기를 만들지 않는다."""
+        assert self._build(deadlines=[], changes=[]) == ""

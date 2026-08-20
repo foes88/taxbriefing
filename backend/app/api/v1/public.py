@@ -24,7 +24,7 @@ from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain import industry, tax_calendar
 from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
 from app.domain.news_topic import LIKE_PATTERNS
-from app.domain.share import build_share_text
+from app.domain.share import build_deadline_text, build_share_text
 from app.models.tables import (
     ContentEvidence,
     ContentSource,
@@ -686,6 +686,68 @@ def public_news(
             for raw, version, source in rows
         ],
         total=total,
+    )
+
+
+class SharePlan(BaseModel):
+    """카톡으로 돌릴 「챙기실 것」 한 장."""
+
+    text: str
+    deadline_count: int
+    change_count: int
+
+
+@router.get("/share/deadlines", response_model=SharePlan)
+def public_share_deadlines(
+    db: ReadSession,
+    within_days: Annotated[int, Query(ge=1, le=180)] = 45,
+    today: Annotated[dt.date | None, Query(include_in_schema=False)] = None,
+) -> SharePlan:
+    """사업주에게 그대로 돌릴 안내문.
+
+    **업종별로 못 만든다. 아직은.** 사장님 대부분이 음식점인데 콘텐츠
+    325건 중 278건이 업종 미분류이고 「요식·음식점」 으로 잡힌 것은 0건이다.
+    골라낼 것이 없는데 골라낸 척하면 빈 안내가 나간다.
+
+    대신 마감 일정으로 만든다. 음식점이든 학원이든 똑같이 걸리고, 날짜가
+    법에 정해져 있어 지어낼 여지가 없다.
+    """
+    base = today or dt.datetime.now(dt.UTC).astimezone(_SEOUL).date()
+    horizon = base + dt.timedelta(days=within_days)
+
+    deadlines = [
+        {
+            "date": item.date.isoformat(),
+            "title": item.title,
+            "audience_label": tax_calendar.LABEL[item.audience],
+        }
+        for item in tax_calendar.upcoming(base, within_days=within_days)
+    ]
+
+    # 이번 기간에 시행되는 **확정된** 개정만. 예고는 넣지 않는다 —
+    # 무산될 수 있는 것을 "새로 정해진 것" 아래 두면 거짓이 된다.
+    rows = db.execute(
+        select(TaxContent.title, TaxContent.effective_date)
+        .where(
+            TaxContent.workflow.in_(PUBLIC_STATES),
+            TaxContent.tenant_id.is_(None),
+            TaxContent.content_kind == ContentKind.POLICY.value,
+            TaxContent.legal != LegalStatus.PREANNOUNCED,
+            TaxContent.effective_date.is_not(None),
+            TaxContent.effective_date >= base,
+            TaxContent.effective_date <= horizon,
+            ~TaxContent.industries.contains([industry.Industry.INTERNAL.value]),
+        )
+        .order_by(TaxContent.effective_date.asc())
+        # 카톡 한 화면을 넘기지 않게. 넘치는 것은 사이트에서 본다.
+        .limit(3)
+    ).all()
+    changes = [{"title": t, "effective_date": d.isoformat()} for t, d in rows]
+
+    return SharePlan(
+        text=build_deadline_text(today=base, deadlines=deadlines, changes=changes),
+        deadline_count=len(deadlines),
+        change_count=len(changes),
     )
 
 

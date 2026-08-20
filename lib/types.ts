@@ -307,3 +307,10 @@ export interface Deadline {
   shifted: boolean;
   days_left: number;
 }
+
+/** 사업주에게 그대로 돌릴 안내문. 서버가 만든다. */
+export interface SharePlan {
+  text: string;
+  deadline_count: number;
+  change_count: number;
+}

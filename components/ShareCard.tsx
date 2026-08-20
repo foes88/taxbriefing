@@ -16,7 +16,15 @@ import { useState } from 'react';
  * **보내기 전에 보여준다.** 눌러야 나오는 상자에 넣으면 확인 없이
  * 복사하게 된다. 펼쳐 두고, 무엇이 나가는지 읽은 다음 누르게 한다.
  */
-export function ShareCard({ text }: { text: string }) {
+export function ShareCard({
+  text,
+  title = '사장님께 보내기',
+  note = '핵심만',
+}: {
+  text: string;
+  title?: string;
+  note?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   if (!text.trim()) return null;
@@ -44,8 +52,8 @@ export function ShareCard({ text }: { text: string }) {
   return (
     <section className="card pad">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="section-title">사장님께 보내기</h2>
-        <span className="shrink-0 text-meta text-ink-3">핵심만</span>
+        <h2 className="section-title">{title}</h2>
+        <span className="shrink-0 text-meta text-ink-3">{note}</span>
       </div>
 
       <pre

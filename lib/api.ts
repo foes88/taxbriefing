@@ -10,6 +10,7 @@ import type {
   PublicContentDetail,
   PublicFeed,
   RawContent,
+  SharePlan,
   SourceItem,
   TokenResponse,
 } from './types';
@@ -142,6 +143,17 @@ export const publicApi = {
   /** 신고·납부 마감일. DB 를 안 보므로 캐시를 길게 잡아도 된다. */
   calendar: (withinDays = 90) =>
     request<Deadline[]>(`/public/calendar?within_days=${withinDays}`, undefined, {
+      cacheSeconds: PUBLIC_CACHE_SECONDS,
+    }),
+
+  /**
+   * 사업주에게 그대로 돌릴 안내문.
+   *
+   * 글은 서버가 만든다. 화면마다 조립하면 문구가 갈리고, 무엇이 나갔는지
+   * 시험으로 확인할 방법이 없어진다.
+   */
+  sharePlan: (withinDays = 45) =>
+    request<SharePlan>(`/public/share/deadlines?within_days=${withinDays}`, undefined, {
       cacheSeconds: PUBLIC_CACHE_SECONDS,
     }),
 

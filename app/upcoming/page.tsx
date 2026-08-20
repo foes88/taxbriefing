@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { ContentCard } from '@/components/Card';
 import { DeadlineCard } from '@/components/DeadlineCard';
 import { Masthead } from '@/components/Masthead';
+import { ShareCard } from '@/components/ShareCard';
 import { publicApi } from '@/lib/api';
 import { daysUntil, seoulToday } from '@/lib/format';
-import type { Deadline, PublicContentSummary, PublicFeed } from '@/lib/types';
+import type { Deadline, PublicContentSummary, PublicFeed, SharePlan } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,9 +52,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
 
   let feed: PublicFeed | null = null;
   let deadlines: Deadline[] = [];
+  let plan: SharePlan | null = null;
   let error: string | null = null;
 
   try {
+    // 사장님께 돌릴 안내문. 마감 화면에서만 보여준다 — 카톡으로 보내는
+    // 것은 "언제까지 뭘 내야 하나" 지 "무슨 법이 바뀌었나" 가 아니다.
+    if (view === 'deadline') {
+      plan = await publicApi.sharePlan(45);
+    }
     if (view === 'law') {
       feed = await publicApi.feed({
         q: q || undefined,
@@ -114,6 +121,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
             </Link>
           ))}
         </div>
+
+        {plan?.text ? <ShareCard text={plan.text} title="사장님께 돌리기" note="이번 달" /> : null}
 
         {error ? (
           <div className="card pad">
