@@ -6,7 +6,13 @@ import { Masthead } from '@/components/Masthead';
 import { ShareCard } from '@/components/ShareCard';
 import { publicApi } from '@/lib/api';
 import { daysUntil, seoulToday } from '@/lib/format';
-import type { Deadline, PublicContentSummary, PublicFeed, SharePlan } from '@/lib/types';
+import type {
+  Deadline,
+  IndustryBucket,
+  PublicContentSummary,
+  PublicFeed,
+  SharePlan,
+} from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,17 +55,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
   const params = await searchParams;
   const view = (params.view === 'law' ? 'law' : 'deadline') as ViewKey;
   const q = typeof params.q === 'string' ? params.q.trim() : '';
+  // 사장님 안내를 어느 업종으로 뽑을지. 안 고르면 마감 일정만 담는다.
+  const forIndustry = typeof params.for === 'string' ? params.for : '';
 
   let feed: PublicFeed | null = null;
   let deadlines: Deadline[] = [];
   let plan: SharePlan | null = null;
+  let industries: IndustryBucket[] = [];
   let error: string | null = null;
 
   try {
     // 사장님께 돌릴 안내문. 마감 화면에서만 보여준다 — 카톡으로 보내는
     // 것은 "언제까지 뭘 내야 하나" 지 "무슨 법이 바뀌었나" 가 아니다.
     if (view === 'deadline') {
-      plan = await publicApi.sharePlan(45);
+      [plan, industries] = await Promise.all([
+        publicApi.sharePlan(45, forIndustry || undefined),
+        publicApi.industries(),
+      ]);
     }
     if (view === 'law') {
       feed = await publicApi.feed({
@@ -122,7 +134,41 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
           ))}
         </div>
 
-        {plan?.text ? <ShareCard text={plan.text} title="사장님께 돌리기" note="이번 달" /> : null}
+        {plan?.text ? (
+          <section className="card pad">
+            <div className="flex items-baseline justify-between gap-3 pb-2.5">
+              <h2 className="section-title">사장님께 돌리기</h2>
+              <span className="shrink-0 text-meta text-ink-3">이번 달</span>
+            </div>
+
+            {/*
+              업종을 고르면 그 업종 건이 아래에 붙는다. 고르지 않으면
+              마감 일정만 담긴다 — 모든 사장님께 똑같이 보내는 글이다.
+
+              칩에 건수를 적는다. 「요식·음식점 2」 를 보고 고르는 것과
+              골랐더니 아무것도 없는 것은 다르다.
+            */}
+            <div className="chips pb-3">
+              <Link href={shareHref(params, '')} className={`chip ${forIndustry ? '' : 'chip-on'}`}>
+                업종 안 고름
+              </Link>
+              {industries
+                .filter((b) => b.code !== 'ALL')
+                .map((b) => (
+                  <Link
+                    key={b.code}
+                    href={shareHref(params, b.code)}
+                    className={`chip ${forIndustry === b.code ? 'chip-on' : ''}`}
+                  >
+                    {b.label}
+                    <span className="tabular text-[13px] font-medium opacity-60">{b.count}</span>
+                  </Link>
+                ))}
+            </div>
+
+            <ShareCard text={plan.text} bare />
+          </section>
+        ) : null}
 
         {error ? (
           <div className="card pad">
@@ -239,4 +285,16 @@ function LawView({
       <p className="pt-6 text-center text-meta text-ink-3">전체 {total}건</p>
     </>
   );
+}
+
+/** 업종만 갈아 끼우고 나머지 조건은 그대로 둔다. */
+function shareHref(params: Record<string, string | string[] | undefined>, code: string) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'for') continue;
+    if (typeof value === 'string' && value) query.set(key, value);
+  }
+  if (code) query.set('for', code);
+  const text = query.toString();
+  return text ? `/upcoming?${text}` : '/upcoming';
 }

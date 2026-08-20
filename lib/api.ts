@@ -152,10 +152,13 @@ export const publicApi = {
    * 글은 서버가 만든다. 화면마다 조립하면 문구가 갈리고, 무엇이 나갔는지
    * 시험으로 확인할 방법이 없어진다.
    */
-  sharePlan: (withinDays = 45) =>
-    request<SharePlan>(`/public/share/deadlines?within_days=${withinDays}`, undefined, {
-      cacheSeconds: PUBLIC_CACHE_SECONDS,
-    }),
+  sharePlan: (withinDays = 45, industry?: string) =>
+    request<SharePlan>(
+      `/public/share/deadlines?within_days=${withinDays}` +
+        (industry ? `&industry=${encodeURIComponent(industry)}` : ''),
+      undefined,
+      { cacheSeconds: PUBLIC_CACHE_SECONDS },
+    ),
 
   industries: () =>
     request<IndustryBucket[]>('/public/industries', undefined, { cacheSeconds: 300 }),

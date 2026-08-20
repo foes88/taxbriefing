@@ -313,4 +313,6 @@ export interface SharePlan {
   text: string;
   deadline_count: number;
   change_count: number;
+  /** 업종 건 수. 0 이면 이 업종으로 잡힌 것이 아직 없다는 뜻이다. */
+  industry_count: number;
 }

@@ -237,3 +237,55 @@ class TestDeadlinePlan:
     def test_nothing_to_say_is_empty(self):
         """빈 껍데기를 만들지 않는다."""
         assert self._build(deadlines=[], changes=[]) == ""
+
+
+class TestIndustrySection:
+    """업종 건을 얹는다.
+
+    처음 만들 때는 못 얹었다 — 325건 중 278건이 업종 미분류였고
+    「요식·음식점」 은 0건이었다. 분류가 고장 나 있었기 때문이다.
+    고치고 다시 물어 채우자 배달 건 두 개가 나왔다. 법령이 아니라
+    해석례에 있었다.
+    """
+
+    TODAY: ClassVar[dt.date] = dt.date(2026, 8, 20)
+    DEADLINES: ClassVar[list[dict]] = [
+        {"date": "2026-09-10", "title": "원천세 신고·납부", "audience_label": "직원 있는 사업장"}
+    ]
+
+    def _build(self, **kw):
+        from app.domain.share import build_deadline_text
+
+        base = {"today": self.TODAY, "deadlines": self.DEADLINES}
+        base.update(kw)
+        return build_deadline_text(**base)
+
+    def test_industry_goes_in_the_title_and_a_section(self):
+        out = self._build(
+            industry_label="요식·음식점",
+            industry_items=["구독회원 배달비 공제액의 매출에누리 해당 여부"],
+        )
+        assert "8월 챙기실 것 — 요식·음식점" in out
+        assert "■ 요식·음식점 건" in out
+        assert "· 구독회원 배달비 공제액의 매출에누리 해당 여부" in out
+
+    def test_no_items_means_no_section(self):
+        """「해당 건 없음」 이라고 적지 않는다.
+
+        받는 쪽은 우리가 안 찾은 건지 없는 건지 알 수 없다.
+        """
+        out = self._build(industry_label="요식·음식점", industry_items=[])
+        assert "■ 신고·납부 마감" in out  # 마감은 그대로 있다
+        assert "■ 요식·음식점 건" not in out
+        assert "없음" not in out
+
+    def test_no_industry_keeps_the_plain_title(self):
+        assert self._build().startswith("[사장님 안내] 8월 챙기실 것\n")
+
+    def test_revision_suffix_is_stripped_here_too(self):
+        out = self._build(
+            industry_label="제조",
+            industry_items=["개별소비세법 (타법개정, 2028-01-01 시행예정)"],
+        )
+        assert "· 개별소비세법" in out
+        assert "시행예정)" not in out

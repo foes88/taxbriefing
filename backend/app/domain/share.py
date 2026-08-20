@@ -176,24 +176,35 @@ def build_deadline_text(
     deadlines: list[dict],
     changes: list[dict] | None = None,
     audience_label: str | None = None,
+    industry_label: str | None = None,
+    industry_items: list[str] | None = None,
 ) -> str:
     """카톡으로 돌릴 「챙기실 것」 한 장.
 
-    **업종별로 못 만든다. 아직은.**
+    뼈대는 **마감 일정**이다. 음식점이든 학원이든 똑같이 걸리고, 날짜가
+    법에 정해져 있어 지어낼 여지가 없다. 사장님이 실제로 물어보는 것도
+    "언제까지 뭘 내야 하나" 다.
 
-    사장님 대부분이 음식점이라 요식업만 골라 보내면 좋겠는데, 콘텐츠
-    325건 중 278건이 업종 미분류다. 「요식·음식점」 으로 잡힌 것은 0건이다.
-    골라낼 것이 없는데 골라낸 척하면 빈 안내가 나간다.
+    거기에 업종 건을 얹는다. 처음 만들 때는 못 얹었다 — 콘텐츠 325건 중
+    278건이 업종 미분류였고 「요식·음식점」 은 0건이었다. 분류가 고장 나
+    있었기 때문이다. 고치고 다시 물어 채우자 배달 건 두 개가 나왔다.
 
-    그래서 업종이 아니라 **마감 일정**으로 만든다. 이건 음식점이든
-    학원이든 똑같이 걸리고, 날짜가 법에 정해져 있어 지어낼 여지가 없다.
-    사장님이 실제로 물어보는 것도 "언제까지 뭘 내야 하나" 다.
+        구독회원 배달비 공제액의 매출에누리 해당 여부
+        플랫폼사업자로부터 수취하지 못한 판매대금이 대손세액공제 대상인지
+
+    법령이 아니라 해석례에 있었다. 배달앱 쓰는 사장님이 실제로 묻는 것이다.
+
+    **업종 건이 없으면 그 줄을 안 쓴다.** 「해당 건 없음」 이라고 적으면
+    받는 쪽은 우리가 안 찾은 건지 없는 건지 알 수 없다.
 
     대상(개인사업자·법인·직원 있는 사업장)은 항목마다 적는다. 거르지
     않는다 — 「나는 법인이 아니니까 이건 아니구나」 를 사장님이 직접
     확인하는 편이, 우리가 잘못 걸러서 하나를 빠뜨리는 것보다 낫다.
     """
-    lines = [f"[사장님 안내] {today.month}월 챙기실 것"]
+    head = f"[사장님 안내] {today.month}월 챙기실 것"
+    if industry_label:
+        head += f" — {industry_label}"
+    lines = [head]
     if audience_label:
         lines.append(f"({audience_label} 기준)")
 
@@ -220,6 +231,11 @@ def build_deadline_text(
             date = dt.date.fromisoformat(str(when))
             line += f" — {date.year}년 {date.month}월 {date.day}일 시행"
         lines.append(line)
+
+    picked = [str(t).strip() for t in (industry_items or []) if str(t).strip()]
+    if picked:
+        lines += ["", f"■ {industry_label or '우리 업종'} 건"]
+        lines += [f"· {_law_name(t)}" for t in picked]
 
     if len(lines) <= 2:
         return ""

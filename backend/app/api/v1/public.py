@@ -695,12 +695,15 @@ class SharePlan(BaseModel):
     text: str
     deadline_count: int
     change_count: int
+    #: 업종 건 수. 0 이면 화면이 "이 업종으로 잡힌 건이 아직 없습니다" 를 띄운다.
+    industry_count: int = 0
 
 
 @router.get("/share/deadlines", response_model=SharePlan)
 def public_share_deadlines(
     db: ReadSession,
     within_days: Annotated[int, Query(ge=1, le=180)] = 45,
+    industry_code: Annotated[str | None, Query(alias="industry")] = None,
     today: Annotated[dt.date | None, Query(include_in_schema=False)] = None,
 ) -> SharePlan:
     """사업주에게 그대로 돌릴 안내문.
@@ -744,10 +747,40 @@ def public_share_deadlines(
     ).all()
     changes = [{"title": t, "effective_date": d.isoformat()} for t, d in rows]
 
+    # 업종 건.
+    #
+    # **예고는 넣지 않는다.** 무산될 수 있는 것을 「우리 업종 건」 아래
+    # 두면 이미 정해진 것으로 읽힌다. 심판례·해석례는 넣는다 — 음식점
+    # 사장님에게 값이 있는 것이 대개 거기다.
+    industry_items: list[str] = []
+    industry_name: str | None = None
+    if industry_code:
+        industry_name = industry.label(industry_code)
+        industry_items = list(
+            db.execute(
+                select(TaxContent.title)
+                .where(
+                    TaxContent.workflow.in_(PUBLIC_STATES),
+                    TaxContent.tenant_id.is_(None),
+                    TaxContent.legal != LegalStatus.PREANNOUNCED,
+                    TaxContent.industries.contains([industry_code]),
+                )
+                .order_by(TaxContent.updated_at.desc())
+                .limit(3)
+            ).scalars()
+        )
+
     return SharePlan(
-        text=build_deadline_text(today=base, deadlines=deadlines, changes=changes),
+        text=build_deadline_text(
+            today=base,
+            deadlines=deadlines,
+            changes=changes,
+            industry_label=industry_name,
+            industry_items=industry_items,
+        ),
         deadline_count=len(deadlines),
         change_count=len(changes),
+        industry_count=len(industry_items),
     )
 
 

@@ -20,10 +20,13 @@ export function ShareCard({
   text,
   title = '사장님께 보내기',
   note = '핵심만',
+  bare = false,
 }: {
   text: string;
   title?: string;
   note?: string;
+  /** 이미 카드 안에 있을 때. 머리말과 테두리를 그리지 않는다. */
+  bare?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -49,13 +52,8 @@ export function ShareCard({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  return (
-    <section className="card pad">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="section-title">{title}</h2>
-        <span className="shrink-0 text-meta text-ink-3">{note}</span>
-      </div>
-
+  const body = (
+    <>
       <pre
         id="share-text"
         className="mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-field bg-surface-sunk p-3 font-sans text-[13.5px] leading-relaxed text-ink-2"
@@ -71,6 +69,18 @@ export function ShareCard({
       >
         {copied ? '복사했습니다' : '복사'}
       </button>
+    </>
+  );
+
+  if (bare) return body;
+
+  return (
+    <section className="card pad">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="section-title">{title}</h2>
+        <span className="shrink-0 text-meta text-ink-3">{note}</span>
+      </div>
+      {body}
     </section>
   );
 }
