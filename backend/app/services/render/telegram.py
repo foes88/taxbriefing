@@ -14,6 +14,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 from app.domain.enums import LegalStatus, RiskLevel
+from app.domain.share import DISCLAIMER
 
 # §10.4 배지 라벨. legal_status 를 사용자 표현으로 옮기는 유일한 지점이다.
 STATUS_LABEL: dict[LegalStatus, str] = {
@@ -107,6 +108,11 @@ class BriefingCard:
 
     proposed_at: dt.date | None = None
     """법안 발의일. 법안에는 이 날짜 하나뿐이다."""
+    #: 사장님에게 그대로 보낼 짧은 글 (app.domain.share).
+    #:
+    #: 실무자용 카드와 같은 자료에서 나오지만 문장이 다르다. 하나로
+    #: 합치려다 말았다 — 합치면 둘 중 하나는 반드시 어색해진다.
+    share_text: str = ""
 
 
 def _fmt_date(value: dt.date | None, *, missing: str) -> str:
@@ -170,6 +176,56 @@ def render_card(card: BriefingCard) -> str:
         lines.append("상세 내용 및 공식 출처 보기")
         lines.append(card.detail_url)
 
+    return "\n".join(lines)
+
+
+#: 사장님 안내에 넣는 최대 건수.
+#:
+#: 실무자용은 여섯 건인데 여기는 셋이다. 이건 **전달되는 메시지**라,
+#: 받는 사람은 우리 고객이 아니라 우리 고객의 고객이다. 그 사람이
+#: 스크롤을 내리는 이유가 없다. 넘치면 몇 건 더 있는지만 적는다.
+OWNER_LIMIT = 3
+
+#: 번호. 카톡에서 숫자와 점을 쓰면 자동 목록으로 바뀌는 앱이 있어
+#: 줄이 밀린다. 원문자는 그런 일이 없다.
+_MARKS = ("①", "②", "③", "④", "⑤")
+
+
+def render_owner_digest(
+    cards: list[BriefingCard],
+    *,
+    today: dt.date,
+    limit: int = OWNER_LIMIT,
+) -> str:
+    """사업주에게 **그대로 전달할** 메시지.
+
+    실무자용 브리핑과 따로 보낸다. 한 메시지에 둘을 섞으면 전달할 때
+    잘라내야 하고, 잘라내다 보면 면책 문구가 떨어져 나간다.
+
+    여기서 새로 쓰는 문장은 없다 — 건별 글은 app.domain.share 가 이미
+    만들어 둔 것을 그대로 쓴다. 이 함수가 하는 일은 번호를 붙이고
+    면책을 한 번만 붙이는 것이다.
+
+    **위험도 표시(중요·긴급)를 안 붙인다.** 그건 실무자가 오늘 무엇부터
+    볼지 정하라고 있는 것이지, 사장님에게 겁을 주라고 있는 것이 아니다.
+    """
+    blocks = [c.share_text.strip() for c in cards if c.share_text.strip()]
+    if not blocks:
+        return ""
+
+    shown, dropped = blocks[:limit], max(0, len(blocks) - limit)
+
+    lines = [f"[사장님 안내] {today.month}월 {today.day}일", ""]
+    lines.append("아래 내용을 그대로 전달하셔도 됩니다.")
+    for mark, block in zip(_MARKS, shown, strict=False):
+        lines += ["", "─" * 20, "", f"{mark} {block}"]
+
+    # 자른 것은 자른 사실을 적는다. 조용히 세 건만 보내면 오늘 나온 게
+    # 이게 전부라고 읽는다.
+    if dropped:
+        lines += ["", f"이 밖에 {dropped}건이 더 있습니다. 필요하시면 말씀해 주세요."]
+
+    lines += ["", DISCLAIMER]
     return "\n".join(lines)
 
 

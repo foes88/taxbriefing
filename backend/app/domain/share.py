@@ -97,6 +97,7 @@ def build_share_text(
     comment_deadline: dt.date | None = None,
     preannounced: bool = False,
     source_url: str | None = None,
+    with_disclaimer: bool = True,
 ) -> str:
     """카톡에 그대로 붙여 넣을 글.
 
@@ -135,7 +136,10 @@ def build_share_text(
 
     if source_url:
         lines += ["", f"원문 {source_url}"]
-    lines += ["", DISCLAIMER]
+    # 여러 건을 묶어 보낼 때는 맨 끝에 한 번만 붙인다. 건마다 반복하면
+    # 세 건짜리 메시지에 같은 문장이 세 번 나오고, 그러면 아무도 안 읽는다.
+    if with_disclaimer:
+        lines += ["", DISCLAIMER]
 
     return "\n".join(lines)
 

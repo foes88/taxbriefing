@@ -123,3 +123,49 @@ class TestPreannounced:
         )
         assert "시행" not in out
         assert "할 일" not in out
+
+
+class TestOwnerDigest:
+    """아침에 따로 나가는 두 번째 메시지. 이것만 전달하면 된다."""
+
+    def _cards(self, n: int):
+        from app.domain.enums import LegalStatus, RiskLevel
+        from app.services.render.telegram import BriefingCard
+
+        return [
+            BriefingCard(
+                title=f"법 {i}",
+                legal_status=LegalStatus.PROMULGATED,
+                risk_level=RiskLevel.HIGH,
+                share_text=f"법 {i}\n\n무엇이 바뀝니다.",
+            )
+            for i in range(n)
+        ]
+
+    def test_disclaimer_appears_once(self):
+        """건마다 붙이면 세 건짜리 메시지에 같은 문장이 세 번 나온다."""
+        from app.services.render.telegram import render_owner_digest
+
+        out = render_owner_digest(self._cards(3), today=dt.date(2026, 8, 20))
+        assert out.count(DISCLAIMER) == 1
+
+    def test_says_how_many_were_left_out(self):
+        """조용히 세 건만 보내면 오늘 나온 게 이게 전부라고 읽는다."""
+        from app.services.render.telegram import render_owner_digest
+
+        out = render_owner_digest(self._cards(6), today=dt.date(2026, 8, 20))
+        assert "이 밖에 3건이 더 있습니다" in out
+
+    def test_no_risk_prefix(self):
+        """[중요] 는 실무자가 순서를 정하라고 있는 것이지, 겁을 주라고 있는 게 아니다."""
+        from app.services.render.telegram import render_owner_digest
+
+        out = render_owner_digest(self._cards(2), today=dt.date(2026, 8, 20))
+        assert "[중요]" not in out
+        assert "[긴급]" not in out
+
+    def test_nothing_to_send_is_empty(self):
+        """보낼 게 없으면 빈 문자열이다. 빈 껍데기 메시지를 보내지 않는다."""
+        from app.services.render.telegram import render_owner_digest
+
+        assert render_owner_digest([], today=dt.date(2026, 8, 20)) == ""

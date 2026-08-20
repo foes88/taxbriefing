@@ -24,11 +24,16 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, get_logger
-from app.domain.enums import ContentKind, WorkflowStatus
+from app.domain.enums import ContentKind, LegalStatus, WorkflowStatus
 from app.domain.industry import Industry
+from app.domain.share import build_share_text
 from app.models.tables import ContentVersion, TaxContent
 from app.services.delivery.channels import OutboundMessage, TelegramAdapter, split_for_telegram
-from app.services.render.telegram import BriefingCard, render_digest
+from app.services.render.telegram import (
+    BriefingCard,
+    render_digest,
+    render_owner_digest,
+)
 
 logger = get_logger(__name__)
 
@@ -46,6 +51,16 @@ def _string_list(body: dict, key: str) -> tuple[str, ...]:
     if isinstance(value, str) and value.strip():
         return (value.strip(),)
     return ()
+
+
+def _iso_date(value: object) -> dt.date | None:
+    """`"2026-08-20"` → date. 아니면 None — 없는 날짜를 만들지 않는다."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def collect_cards(
@@ -116,6 +131,22 @@ def collect_cards(
         if not changes and not actions:
             continue
 
+        # 사장님에게 그대로 보낼 글도 같이 만들어 둔다. 여기서 만드는
+        # 이유는 body 와 콘텐츠 필드가 여기 다 모여 있기 때문이다 —
+        # 렌더러까지 들고 가면 같은 조회를 한 번 더 해야 한다.
+        share_text = build_share_text(
+            title=content.title,
+            summary=content.one_line_summary,
+            body=body,
+            effective_date=content.effective_date,
+            comment_deadline=_iso_date(body.get("comment_deadline")),
+            preannounced=content.legal is LegalStatus.PREANNOUNCED,
+            # 링크는 우리 상세 화면으로 보낸다. 거기에 공식 출처가 함께
+            # 있어서, 더 파고들 사람은 한 번 더 눌러 원문까지 간다.
+            source_url=f"{site_base.rstrip('/')}/contents/{content.id}",
+            with_disclaimer=False,
+        )
+
         cards.append(
             BriefingCard(
                 title=content.title,
@@ -134,6 +165,7 @@ def collect_cards(
                 # 것처럼 읽힌다.
                 kind=content.content_kind,
                 proposed_at=content.announcement_date,
+                share_text=share_text,
             )
         )
 
@@ -151,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
     # 중요한 것부터 여섯 건만 보내고 나머지는 사이트로 보낸다.
     parser.add_argument("--limit", type=int, default=6, help="최대 카드 수 (기본 6)")
     parser.add_argument("--send", action="store_true", help="실제 전송 (기본은 미리보기)")
+    parser.add_argument(
+        "--no-owner", action="store_true", help="사장님 안내를 보내지 않는다"
+    )
     parser.add_argument("--chat-id", help="수신 chat_id (기본: 환경변수)")
     parser.add_argument(
         "--site",
@@ -179,10 +214,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     chunks = split_for_telegram(text)
 
+    # **사장님 안내는 따로 보낸다.**
+    #
+    # 한 메시지에 둘을 섞으면 전달할 때 위쪽을 잘라내야 하고, 잘라내다
+    # 보면 맨 끝의 면책 문구까지 떨어져 나간다. 통째로 넘길 수 있게
+    # 메시지를 나눈다 — 카톡으로 옮길 때도 이 한 덩어리만 복사하면 된다.
+    owner_text = "" if args.no_owner else render_owner_digest(cards, today=today)
+
     print("=" * 60)
     print(text)
-    print("=" * 60)
+    if owner_text:
+        print("=" * 60)
+        print(owner_text)
     print(f"\n브리핑 {len(cards)}건 · 메시지 {len(chunks)}개 · {len(text)}자")
+    if owner_text:
+        print(f"사장님 안내 {len(owner_text)}자")
 
     if not args.send:
         print("\n[미리보기] 실제로 보내려면 --send 를 붙이세요.")
@@ -201,15 +247,35 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    recipient = args.chat_id or ""
     message = OutboundMessage(subject=None, body=text, content_url=None)
     adapter.validate(message)
-    result = adapter.send(recipient=args.chat_id or "", message=message)
+    result = adapter.send(recipient=recipient, message=message)
 
-    if result.ok:
-        print(f"\n발송 완료 (message_id={result.provider_message_id})")
+    if not result.ok:
+        print(f"\n발송 실패: {result.error_code} — {result.error_detail}", file=sys.stderr)
+        return 1
+
+    print(f"\n발송 완료 (message_id={result.provider_message_id})")
+
+    if not owner_text:
         return 0
 
-    print(f"\n발송 실패: {result.error_code} — {result.error_detail}", file=sys.stderr)
+    # 사장님 안내가 실패해도 브리핑은 이미 나갔다. 실패로 끝내되 무엇이
+    # 나가고 무엇이 안 나갔는지 분명히 적는다 — "발송 실패" 한 줄만 남으면
+    # 아침에 아무것도 안 온 줄 알고 다시 돌리게 된다.
+    owner = OutboundMessage(subject=None, body=owner_text, content_url=None)
+    adapter.validate(owner)
+    second = adapter.send(recipient=recipient, message=owner)
+    if second.ok:
+        print(f"사장님 안내 발송 완료 (message_id={second.provider_message_id})")
+        return 0
+
+    print(
+        "\n브리핑은 나갔으나 사장님 안내가 실패했습니다: "
+        f"{second.error_code} — {second.error_detail}",
+        file=sys.stderr,
+    )
     return 1
 
 

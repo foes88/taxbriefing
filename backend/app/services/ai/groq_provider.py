@@ -64,6 +64,11 @@ SYSTEM_PROMPT = """\
    명시하지 않으면 UNKNOWN 이다.
 5. HTML·마크다운을 쓰지 않는다. 순수 텍스트만 쓴다.
 6. 사업자가 읽을 문장으로 쓴다. 행정 용어를 풀어 쓰되 사실을 바꾸지 않는다.
+7. required_actions 는 **사업자가 직접 하는 일**만 적는다. 과세관청·국세청·정부·
+   금융기관이 하는 일은 적지 않는다. 원문이 관청의 절차를 규정한 것이면 사업자가
+   할 일은 없는 것이고, 그때는 빈 배열이다.
+   예: "신용카드 결제 시스템을 전 세목 지원하도록 업데이트" → 국세청이 하는 일. 넣지 않는다.
+   예: "생계비계좌에 해당하는 예금이 있는지 확인" → 사업자가 하는 일. 넣는다.
 
 무엇을 적고 무엇을 빼는가
 - changes 에는 **사업자에게 실질적으로 달라지는 것**만 적는다.
@@ -92,7 +97,7 @@ OUTPUT_SPEC = """\
   "excluded_users": ["제외 대상. 원문에 제외 규정이 있을 때만"],
   "changes": [{"text": "기존 대비 달라지는 점", "locator": "근거 위치"}],
   "business_impact": [{"text": "세금·비용·신고·노무 영향", "locator": "근거 위치"}],
-  "required_actions": [{"text": "사업자가 할 일", "urgency": "NOW|BEFORE_DEADLINE|MONITOR|ASK_EXPERT", "locator": "근거 위치"}],
+  "required_actions": [{"text": "사업자 본인이 하는 일. 관청이 하는 일은 넣지 않는다", "urgency": "NOW|BEFORE_DEADLINE|MONITOR|ASK_EXPERT", "locator": "근거 위치"}],
   "topics": ["세목·분야. 예: 부가가치세, 법인세, 성실신고확인"],
   "warnings": [{"code": "MISSING_EVIDENCE|AMBIGUOUS_SCOPE|NEEDS_EXPERT|SOURCE_CONFLICT", "message": "설명", "related_fields": ["필드명"]}]
 }
