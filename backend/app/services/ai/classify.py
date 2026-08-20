@@ -42,7 +42,24 @@ JSON 객체 하나만 출력한다. 설명·코드펜스를 붙이지 않는다.
 
 
 def _taxonomy_block() -> str:
-    return "\n".join(f"- {item.value}: {GUIDE[item]}" for item in Industry)
+    """모델에게 보여줄 분류표.
+
+    **INTERNAL 을 빼고 만든다.** 그건 업종이 아니라 화면에서 숨긴다는
+    표시이고, 규칙(is_internal_document)만 붙인다. 목록에 넣으면 모델이
+    고를 수 있게 되고, 그러면 진짜 세법이 조용히 숨는다.
+
+    빼야 하는 이유가 하나 더 있었다. GUIDE 에는 INTERNAL 설명이 없는데
+    여기서 Industry 전체를 훑고 있었다.
+
+        KeyError: <Industry.INTERNAL: 'INTERNAL'>
+
+    그리고 부르는 쪽이 KeyError 를 "AI 호출 실패" 로 잡아 삼켰다.
+    분류가 **한 번도 성공하지 못한 채** 매일 조용히 실패했고, 미분류가
+    278건까지 쌓였다. 「요식·음식점」 이 0건이었던 것도 이 때문이다.
+    """
+    return "\n".join(
+        f"- {item.value}: {GUIDE[item]}" for item in Industry if item in GUIDE
+    )
 
 
 def _text_list(body: dict[str, Any], key: str, limit: int = 6) -> list[str]:
@@ -177,7 +194,14 @@ def classify_industries(
             SYSTEM_PROMPT, "\n".join(lines), max_tokens=1200
         )
         data = json.loads(payload["content"])
-    except (GroqError, json.JSONDecodeError, KeyError) as exc:
+    except (GroqError, json.JSONDecodeError) as exc:
+        # **KeyError 를 여기서 잡지 않는다.**
+        #
+        # 잡고 있었더니 분류표를 만들다 난 KeyError 까지 "AI 실패" 로
+        # 기록됐다. 고칠 것은 우리 코드인데 화면에는 매일 "다시 돌리면
+        # 이어집니다" 만 떴고, 그래서 아무도 코드를 안 봤다.
+        #
+        # 우리 잘못은 우리 잘못으로 죽어야 한다.
         logger.warning("classify.failed", title=title[:60], error=str(exc)[:200])
         return None
 
