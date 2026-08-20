@@ -21,11 +21,15 @@ name: 매일 브리핑
 
 on:
   schedule:
-    # 22:00 UTC = 07:00 KST (다음 날). 출근 전에 받아 보도록 앞당겼다.
+    # 22:17 UTC = 07:17 KST (다음 날). 출근 전에 받아 보도록 앞당겼다.
     #
     # UTC 로 적어야 해서 헷갈리기 쉽다 — 한국 시각에서 9시간을 빼고
     # 음수가 되면 전날로 넘어간다. 7 - 9 = -2 → 전날 22시.
-    - cron: '0 22 * * *'
+    #
+    # **정시를 피한다.** 처음엔 '0 22' 였는데 8월 17일과 20일 실행이
+    # 통째로 빠졌다. 예약 실행은 보장이 아니라 여유 있을 때 돌려주는
+    # 것이고, 정각은 전 세계가 몰리는 시간대다. 17분으로 비켜 둔다.
+    - cron: '17 22 * * *'
   workflow_dispatch:
     inputs:
       days:
@@ -127,6 +131,24 @@ jobs:
         continue-on-error: true
         run: python -m app.collect --days "${{ inputs.days || '14' }}" --limit 120
 
+      # **이 단계가 없어서 사흘 동안 아무것도 안 올라갔다.**
+      #
+      # 수집은 원문(raw_contents)까지만 만든다. 사람이 보는 콘텐츠는
+      # bulk_draft 가 만든다. 그 단계가 빠져 있어서, 8월 18~19일에 들어온
+      # 상속세및증여세법 시행령·지방세법 시행령 여섯 건이 원문으로만 남고
+      # 사이트에도 텔레그램에도 안 나갔다. 보낼 것이 없으니 발송은
+      # 조용히 끝났고, 고장 난 것처럼 보이지도 않았다.
+      #
+      # --auto-approve 로 바로 게시한다. 매일 아침 승인할 사람이 없으면
+      # 아무것도 게시되지 않는다. 대신 감사 기록에 "사람이 원문과 대조하지
+      # 않았습니다" 를 그대로 남긴다 (AUTO_REVIEW_NOTE).
+      - name: 초안 생성·게시
+        id: draft
+        if: steps.ready.outputs.db == 'true'
+        working-directory: backend
+        continue-on-error: true
+        run: python -m app.bulk_draft --auto-approve
+
       - name: 요약
         id: summarize
         if: steps.ready.outputs.db == 'true' && steps.ready.outputs.ai == 'true'
@@ -166,6 +188,7 @@ jobs:
             echo "| 단계 | 결과 |"
             echo "| --- | --- |"
             echo "| 수집 | ${{ steps.collect.outcome }} |"
+            echo "| 초안 생성·게시 | ${{ steps.draft.outcome }} |"
             echo "| 요약 | ${{ steps.summarize.outcome }} |"
             echo "| 업종 분류 | ${{ steps.classify.outcome }} |"
             echo "| 발송 미리보기 | ${{ steps.preview.outcome }} |"

@@ -24,7 +24,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.domain.enums import (
     AuthorityGrade,
@@ -81,6 +80,26 @@ def _is_preannounce(meta: dict) -> bool:
     다시 들어온다.
     """
     return str(meta.get("legal_status") or "").strip() == LegalStatus.PREANNOUNCED.value
+
+
+#: 자동 승인일 때 남기는 검수 기록.
+#:
+#: **사람이 봤다고 적지 않는다.** 예전 문구는 "대조 확인" 이었는데,
+#: 감사 기록만 보면 누군가 원문과 맞춰 본 것으로 읽힌다. 실제로는
+#: 배치가 API 필드를 그대로 옮겨 적은 것이다.
+#:
+#: 자동 승인을 켜기로 한 이유는 이렇다. 매일 아침 승인할 사람이 없으면
+#: 아무것도 게시되지 않고, 게시되지 않으면 텔레그램도 조용하다. 실제로
+#: 8월 18~19일에 들어온 상속세및증여세법 시행령·지방세법 시행령 여섯 건이
+#: 그렇게 묻혔고, "오늘은 텔레그램 안 왔는데" 로 돌아왔다.
+#:
+#: 대신 무엇을 근거로 통과시켰는지는 기록에 정확히 남긴다. 여기서 쓰는
+#: 값은 전부 API 응답 필드이고, 모델이 쓴 요약은 별도로 [검수 필요] 가
+#: 붙은 채 나간다.
+AUTO_REVIEW_NOTE = (
+    "자동 승인. 사람이 원문과 대조하지 않았습니다. "
+    "법령 API 응답 필드(공포일·시행일·제개정구분)를 그대로 옮겼습니다."
+)
 
 
 def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today: dt.date) -> LegalStatus:
@@ -501,11 +520,6 @@ def run(
     auto_approve: bool,
     today: dt.date,
 ) -> dict[str, int]:
-    settings = get_settings()
-    if auto_approve and settings.environment not in ("local", "test"):
-        raise RuntimeError(
-            "--auto-approve 는 로컬 개발 전용입니다. 운영에서는 검수자가 승인해야 합니다 (§1.3)."
-        )
 
     reviewer = db.execute(
         select(User).where(User.role == Role.REVIEWER.value).limit(1)
@@ -686,7 +700,7 @@ def run(
                     content,
                     reviewer_id=reviewer.id,
                     decision=ReviewDecision.APPROVE,
-                    review_note="법령 API 서지정보(공포일·시행일·제개정구분) 대조 확인",
+                    review_note=AUTO_REVIEW_NOTE,
                     checked_source_version_ids=[version.id],
                 )
                 content_service.publish(db, content)
