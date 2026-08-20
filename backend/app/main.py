@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
+from app.core.cache import TTL_SECONDS, TtlCache, cache_key
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler, validation_error_handler
 from app.core.logging import configure_logging, get_logger, new_trace_id, set_trace_id
@@ -42,6 +43,63 @@ app.add_middleware(
     expose_headers=["X-Trace-Id"],
     max_age=600,
 )
+
+
+#: 공개 화면 응답을 잠깐 들고 있는 자리.
+#:
+#: 관리자 화면은 담지 않는다 — 사람마다 보이는 것이 다른 응답을 한 통에
+#: 담으면 남의 것이 보인다. 경로로 가른다.
+_PUBLIC_PREFIX = "/api/v1/public/"
+_response_cache = TtlCache()
+
+
+@app.middleware("http")
+async def public_cache_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """공개 GET 응답을 TTL 만큼 들고 있는다.
+
+    자료는 아침 배치가 돌 때 하루 한 번 바뀐다. 그런데 오늘/일정/찾기를
+    오가면 같은 값을 매번 미국까지 다시 물어 온다 — 왕복 한 번이 393ms 다.
+
+    **읽기만, 성공만, 공개 경로만 담는다.** 나머지는 그대로 흘려보낸다.
+    """
+    cacheable = request.method == "GET" and request.url.path.startswith(_PUBLIC_PREFIX)
+    if not cacheable:
+        return await call_next(request)
+
+    key = cache_key(request.url.path, request.url.query)
+    hit = _response_cache.get(key)
+    if hit is not None:
+        body, media_type = hit  # type: ignore[misc]
+        response = Response(content=body, media_type=media_type)
+        # 어디서 온 값인지 남긴다. 캐시를 의심할 일이 생겼을 때
+        # 이 머리글 하나면 재현이 끝난다.
+        response.headers["X-Cache"] = "HIT"
+        response.headers["Cache-Control"] = f"public, max-age={TTL_SECONDS}"
+        return response
+
+    response = await call_next(request)
+    if response.status_code != 200:
+        return response
+
+    chunks = [chunk async for chunk in response.body_iterator]
+    body = b"".join(chunks)
+    _response_cache.set(key, (body, response.media_type))
+
+    fresh = Response(
+        content=body,
+        status_code=response.status_code,
+        media_type=response.media_type,
+    )
+    for name, value in response.headers.items():
+        # 길이는 새 응답이 다시 계산한다. 옛 값을 그대로 옮기면
+        # 본문과 어긋나 브라우저가 응답을 잘라 읽는다.
+        if name.lower() != "content-length":
+            fresh.headers[name] = value
+    fresh.headers["X-Cache"] = "MISS"
+    fresh.headers["Cache-Control"] = f"public, max-age={TTL_SECONDS}"
+    return fresh
 
 
 @app.middleware("http")

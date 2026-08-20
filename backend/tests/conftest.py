@@ -164,3 +164,21 @@ def make_user(db):
         return user
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def _clear_public_cache():
+    """공개 응답 캐시를 시험마다 비운다.
+
+    캐시를 시험에서 꺼 버리면 그 미들웨어가 한 번도 안 돌아 보고, 그러면
+    운영에서만 나는 버그를 시험이 못 잡는다. 끄지 않고 비운다 — 미들웨어는
+    그대로 지나가되 앞 시험이 담아 둔 값은 안 보인다.
+
+    안 비웠더니 16건이 깨졌다. 데이터를 넣고 같은 주소를 부르는 시험들이
+    앞 시험의 응답을 받아 갔다.
+    """
+    from app.main import _response_cache
+
+    _response_cache.clear()
+    yield
+    _response_cache.clear()
