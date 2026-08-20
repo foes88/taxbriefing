@@ -111,12 +111,23 @@ def _item_block(key: str, content: TaxContent, body: dict) -> str:
     return "\n".join(lines)
 
 
-def _export(out_dir: Path, limit: int) -> int:
+def _export(out_dir: Path, limit: int, retry_empty: bool) -> int:
     db = SessionLocal()
     try:
+        # 기본은 아직 판단하지 않은 것(search_text 가 비어 있음).
+        #
+        # --retry-empty 는 **판단은 끝났는데 업종이 하나도 안 붙은 것**을
+        # 다시 묻는다. 심판례 47건·해석례 40건이 전부 그랬는데, 음식점
+        # 사장님께 골라 보낼 사례가 있다면 바로 거기에 있다. 분류가
+        # 고장 나 있던 동안 붙은 값일 수도 있어서 한 번은 다시 봐야 한다.
+        condition = (
+            TaxContent.industries == []
+            if retry_empty
+            else TaxContent.search_text.is_(None)
+        )
         stmt = (
             select(TaxContent)
-            .where(TaxContent.search_text.is_(None))
+            .where(condition)
             .order_by(TaxContent.updated_at.desc())
         )
         if limit:
@@ -293,12 +304,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--export", metavar="DIR", help="프롬프트 파일을 만들 폴더")
     parser.add_argument("--limit", type=int, default=0, help="내보낼 최대 건수 (0=전체)")
+    parser.add_argument(
+        "--retry-empty",
+        action="store_true",
+        help="업종이 하나도 안 붙은 것을 다시 묻는다",
+    )
     parser.add_argument("--import", dest="answer", metavar="FILE", help="받은 JSON 파일")
     parser.add_argument("--dry-run", action="store_true", help="저장하지 않음")
     args = parser.parse_args(argv)
 
     if args.export:
-        return _export(Path(args.export), args.limit)
+        return _export(Path(args.export), args.limit, args.retry_empty)
     if args.answer:
         return _import(Path(args.answer), args.dry_run)
     parser.error("--export 또는 --import 중 하나가 필요합니다")
