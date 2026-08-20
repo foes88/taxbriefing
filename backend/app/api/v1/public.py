@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select, true
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
-from app.api.deps import DbSession
+from app.api.deps import ReadSession
 from app.core.errors import NotFoundError, ValidationFailedError
 from app.domain import industry, tax_calendar
 from app.domain.enums import ContentKind, LegalStatus, RiskLevel, WorkflowStatus
@@ -312,7 +312,7 @@ def _month_range(month: str) -> tuple[dt.date, dt.date]:
 
 @router.get("/months", response_model=list[MonthBucket])
 def public_months(
-    db: DbSession,
+    db: ReadSession,
     tenant_id: Annotated[UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=36)] = 18,
 ) -> list[MonthBucket]:
@@ -359,7 +359,7 @@ class IndustryBucket(BaseModel):
 
 
 @router.get("/industries", response_model=list[IndustryBucket])
-def public_industries(db: DbSession) -> list[IndustryBucket]:
+def public_industries(db: ReadSession) -> list[IndustryBucket]:
     """업종 목록과 건수.
 
     분류표 전체가 아니라 **실제로 게시된 건이 있는 업종만** 준다.
@@ -394,7 +394,7 @@ def public_industries(db: DbSession) -> list[IndustryBucket]:
 
 @router.get("/feed", response_model=PublicFeed)
 def public_feed(
-    db: DbSession,
+    db: ReadSession,
     q: Annotated[str | None, Query(description="제목·요약 키워드")] = None,
     legal_status: Annotated[list[LegalStatus] | None, Query()] = None,
     risk_level: Annotated[list[RiskLevel] | None, Query()] = None,
@@ -476,36 +476,56 @@ def public_feed(
             TaxContent.application_end <= horizon,
         )
 
-    # **세기만 할 때는 세기만 한다.**
+    # **왕복 횟수가 곧 체감 속도다.**
     #
-    # 예전에는 `len(db.execute(stmt).scalars().all())` 였다. 스무 건을
-    # 보여주려고 조건에 맞는 콘텐츠 전부를 ORM 객체로 만들어 놓고 길이만
-    # 쟀다. 284건이면 284개를 만들었다 버린 셈이고, 목록 한 번 여는 데
-    # 500ms 가 들었다. 늘어날수록 나빠지는 종류의 낭비다.
-    total = db.execute(
-        select(func.count()).select_from(stmt.order_by(None).subquery())
-    ).scalar_one()
+    # DB 가 미국(Neon us-east-2)이고 화면을 여는 사람은 한국에 있다.
+    # 왕복 한 번에 393ms 다. 쿼리가 몇 개인지가 그대로 초 단위로 나온다.
+    # 실제로 찾기 화면이 5개 쿼리에 4.9초였다.
+    #
+    #     415ms  count(*)
+    #     418ms  tax_contents
+    #     208ms  content_sources    ← 이 목록은 안 쓴다
+    #     210ms  content_evidence   ← 이 목록은 안 쓴다
+    #     211ms  content_versions
+    #
+    # 뒤의 둘은 TaxContent 의 관계가 lazy="selectin" 이라 자동으로 딸려
+    # 온 것이다. 상세 화면에는 필요하지만 목록에는 한 글자도 안 쓰인다.
+    # 끊는다.
+    #
+    # 세는 쿼리도 따로 돌 이유가 없다. 창 함수는 LIMIT 이 걸리기 전에
+    # 계산되므로 한 번에 같이 가져올 수 있다.
+    ordered = (
+        stmt.order_by(
+            TaxContent.risk.desc(),
+            TaxContent.application_end.asc().nullslast(),
+            TaxContent.updated_at.desc(),
+        )
+        .options(noload(TaxContent.sources), noload(TaxContent.evidence))
+        .add_columns(func.count().over().label("total"))
+        # 본문도 같이 끌고 온다. 콘텐츠 하나에 현재 버전은 하나뿐이라
+        # 줄 수가 늘지 않는다. 따로 물으면 그것만으로 왕복 한 번이다.
+        .outerjoin(ContentVersion, ContentVersion.id == TaxContent.current_version_id)
+        .add_columns(ContentVersion.body)
+        .limit(limit)
+        .offset(offset)
+    )
 
-    # 중요도 → 마감 임박 → 최신 순 (FR-USR-001).
-    ordered = stmt.order_by(
-        TaxContent.risk.desc(),
-        TaxContent.application_end.asc().nullslast(),
-        TaxContent.updated_at.desc(),
-    ).limit(limit).offset(offset)
+    rows = db.execute(ordered).all()
+    contents = [row[0] for row in rows]
+    total = rows[0][1] if rows else 0
+    bodies: dict[UUID, dict] = {
+        row[0].current_version_id: (row[2] if isinstance(row[2], dict) else {})
+        for row in rows
+        if row[0].current_version_id
+    }
 
-    contents = list(db.execute(ordered).scalars())
-
-    # 본문은 현재 버전에 있다. 목록에 나갈 만큼만 한 번에 읽는다 —
-    # 항목마다 따로 조회하면 한 화면에 백 번 넘게 왕복한다.
-    version_ids = [c.current_version_id for c in contents if c.current_version_id]
-    bodies: dict[UUID, dict] = {}
-    if version_ids:
-        bodies = {
-            v.id: (v.body if isinstance(v.body, dict) else {})
-            for v in db.execute(
-                select(ContentVersion).where(ContentVersion.id.in_(version_ids))
-            ).scalars()
-        }
+    # 빈 쪽이 나왔는데 그게 첫 쪽이 아니면, 창 함수는 셀 것이 없어 0 을
+    # 준다. 그건 "조건에 맞는 게 없다" 가 아니라 "이 쪽에 없다" 다.
+    # 건수를 0 이라고 말하면 거짓이므로 그때만 따로 센다.
+    if not rows and offset:
+        total = db.execute(
+            select(func.count()).select_from(stmt.order_by(None).subquery())
+        ).scalar_one()
 
     # 본문 없는 종류(법령해석)만 원문 주소를 같이 싣는다. 화면이 우리
     # 상세를 거치지 않고 바로 원문으로 보내야 하기 때문이다.
@@ -598,7 +618,7 @@ def public_calendar(
 
 @router.get("/news", response_model=NewsFeed)
 def public_news(
-    db: DbSession,
+    db: ReadSession,
     q: Annotated[str | None, Query(description="제목 키워드")] = None,
     days: Annotated[int, Query(ge=1, le=365, description="최근 N일")] = 30,
     all_topics: Annotated[
@@ -670,7 +690,7 @@ def public_news(
 
 
 @router.get("/contents/{content_id}", response_model=PublicContentDetail)
-def public_content(content_id: UUID, db: DbSession) -> PublicContentDetail:
+def public_content(content_id: UUID, db: ReadSession) -> PublicContentDetail:
     """콘텐츠 상세 (U-03). 공식 출처를 접지 않고 그대로 노출한다 (§10.4)."""
     content = db.execute(
         select(TaxContent).where(

@@ -209,6 +209,16 @@
     background: var(--ink);
   }
 
+  /* 줄바꿈하는 칩 묶음.
+     처음엔 이것도 .rail 이었다 — 가로로 밀어 보는 줄. 그런데 스크롤바를
+     감춰 놨더니 마우스로는 밀 방법이 없었다. 화면 오른쪽에서 「제조」 가
+     잘린 채 거기서 끝이었다. 손가락으로 쓸어 넘길 수 있는 화면에서만
+     동작하는 셈이라, 절반의 사용자에게는 없는 칩이었다.
+     칩은 열한 개가 넘지 않는다. 두세 줄로 접히는 편이 낫다. */
+  .chips {
+    @apply flex flex-wrap gap-2;
+  }
+
   /* 가로로 미는 줄. 스크롤바는 감춘다 */
   .rail {
     @apply flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;

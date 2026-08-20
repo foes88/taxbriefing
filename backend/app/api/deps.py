@@ -12,13 +12,22 @@ from typing import Annotated
 from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
-from app.core.db import get_db
+from app.core.db import get_db, get_read_db
 from app.core.errors import UnauthorizedError, ValidationFailedError
 from app.core.rbac import ADMIN_ROLES, EDIT_ROLES, REVIEW_ROLES, STAFF_ROLES, ensure_role
 from app.core.security import Principal, decode_access_token
 from app.domain.enums import Role
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+#: 읽기만 하는 엔드포인트용.
+#:
+#: 트랜잭션을 열지 않으므로 세션을 닫을 때 ROLLBACK 왕복이 없다. DB 가
+#: 미국에 있어서 그 한 번이 200ms 다 — 목록 한 번 여는 시간의 5분의 1이었다.
+#:
+#: **쓰는 엔드포인트에 붙이면 안 된다.** AUTOCOMMIT 이라 한 요청 안의
+#: 변경이 하나씩 따로 확정되고, 중간에 실패하면 반쪽만 남는다.
+ReadSession = Annotated[Session, Depends(get_read_db)]
 
 
 def get_principal(

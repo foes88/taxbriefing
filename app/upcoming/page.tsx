@@ -107,7 +107,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
           </button>
         </form>
 
-        <div className="rail pb-5">
+        <div className="chips pb-5">
           {VIEWS.map((v) => (
             <Link key={v.key} href={href(v.key)} className={`chip ${view === v.key ? 'chip-on' : ''}`}>
               {v.label}

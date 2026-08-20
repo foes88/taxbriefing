@@ -22,13 +22,16 @@ from tests.conftest import requires_db
 class TestHiddenContent:
     @pytest.fixture
     def client(self, db):
-        from app.core.db import get_db
+        from app.core.db import get_db, get_read_db
         from app.main import app
 
         def _override():
             yield db
 
         app.dependency_overrides[get_db] = _override
+        # 공개 화면은 읽기 전용 세션을 쓴다(ReadSession). 하나만
+        # 갈아끼우면 그쪽이 진짜 DB 로 새서 목록이 통째로 비어 보인다.
+        app.dependency_overrides[get_read_db] = _override
         with TestClient(app) as c:
             yield c
         app.dependency_overrides.clear()

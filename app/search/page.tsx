@@ -123,7 +123,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
         </form>
 
         {/* 종류 칩. 상담 중에는 종류를 모르고 찾으므로 전체가 기본이다. */}
-        <div className="rail pb-2">
+        <div className="chips pb-2">
           {KINDS.map((k) => (
             <Link
               key={k.key}
@@ -142,7 +142,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
           까지만 한다.
         */}
         {kind !== 'NEWS' && industries.length > 0 ? (
-          <div className="rail pb-4">
+          <div className="chips pb-4">
             <Link
               href={keep({ ...carried, industry: undefined })}
               className={`chip ${industry ? '' : 'chip-on'}`}
