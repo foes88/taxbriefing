@@ -31,8 +31,25 @@ class TestKindsWithoutAi:
         """법령은 요약해야 한다. 여기까지 빼면 화면에 법령명만 남는다."""
         assert ContentKind.POLICY.value not in KINDS_WITHOUT_AI
 
-    def test_bill_is_included(self):
-        assert ContentKind.BILL.value not in KINDS_WITHOUT_AI
+    def test_bill_is_excluded(self):
+        """법안도 뺀다. **처음엔 넣어 뒀는데 근거가 없었다.**
+
+        국회 API 는 조문을 안 준다. 모델에게 준 것이 이게 전부였다.
+
+            의안명: 조세특례제한법 일부개정법률안
+            제안자: 문진석의원 등 12인
+            처리결과: 심사 중
+
+        86건에 돌렸고 나온 것은 전부 빈 배열이었다. 그러면서 한 줄 요약을
+        이렇게 덮었다.
+
+            구체적인 내용이 확정되지 않아 사업자에게 직접적인 변화는 없습니다.
+
+        내용은 확정돼 있다. 우리가 조문을 안 가지고 있을 뿐이고, 그건
+        모델이 알 수 없는 사정이다. 아무것도 못 얻으면서 하루치 토큰의
+        두 배를 태웠다.
+        """
+        assert ContentKind.BILL.value in KINDS_WITHOUT_AI
 
 
 class TestAlreadySummarized:
