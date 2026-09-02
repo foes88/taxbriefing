@@ -19,7 +19,15 @@ export function DeadlineCard({ deadline }: { deadline: Deadline }) {
 
   return (
     <div className="card flex gap-4 px-5 py-4">
-      <div className="w-12 shrink-0 text-center">
+      {/*
+        폭을 세 자리에 맞춘다. 48px 이었더니 320px 화면에서 「D-131」 이
+        「D-」 와 「131」 로 끊겨 두 줄이 됐다. 남은 날짜가 이 화면의
+        첫 번째 정보인데 그게 깨지면 볼 이유가 없어진다.
+
+        칸을 고정해 두는 것은 카드가 여러 장 쌓일 때 왼쪽 줄이 맞기
+        때문이다. 내용에 맞춰 늘리면 줄이 들쭉날쭉해진다.
+      */}
+      <div className="w-14 shrink-0 whitespace-nowrap text-center">
         <div
           className={`tabular text-[19px] font-extrabold leading-none ${
             urgent ? 'text-danger' : 'text-ink'

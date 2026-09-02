@@ -102,6 +102,22 @@ AUTO_REVIEW_NOTE = (
 )
 
 
+#: 날짜가 하나뿐인 종류. 해석은 회신일, 판례는 선고일, 심판례는 의결일.
+#:
+#: 공포일도 시행일도 없다. 그 하나를 안 옮기면 화면이 주황색 「확인 필요」
+#: 를 띄우는데, 확인할 것이 없는 게 아니라 우리가 안 옮긴 것이다.
+#:
+#: 목록으로 뽑아 둔다. 코드 안에 튜플로 박아 뒀더니 심판례가 빠진 것을
+#: 아무도 못 봤고, 시험으로 잡을 자리도 없었다.
+KINDS_WITH_DECIDED_DATE: frozenset[str] = frozenset(
+    {
+        ContentKind.INTERPRETATION.value,
+        ContentKind.PRECEDENT.value,
+        ContentKind.TRIBUNAL.value,
+    }
+)
+
+
 def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today: dt.date) -> LegalStatus:
     """법적 상태를 원문 필드에서 **판정**한다. 추정하지 않는다.
 
@@ -635,13 +651,22 @@ def run(
             #
             # 국회 API 의 PROC_RESULT 를 수집기가 읽어 BILL_PROPOSED /
             # ASSEMBLY_PASSED 로 갈라 두었는데 그걸 버리고 있었다.
-            # 해석·판례는 회신일·선고일 하나뿐이다. 공포일도 시행일도 없다.
-            # 그 날짜를 안 옮기면 화면이 "확인 필요" 를 띄우는데, 확인할
-            # 것이 없는 게 아니라 우리가 안 옮긴 것이다.
-            if content.content_kind in (
-                ContentKind.INTERPRETATION.value,
-                ContentKind.PRECEDENT.value,
-            ):
+            # 해석·판례·심판례는 회신일·선고일·의결일 하나뿐이다.
+            # 공포일도 시행일도 없다. 그 날짜를 안 옮기면 화면이
+            # "확인 필요" 를 띄우는데, 확인할 것이 없는 게 아니라
+            # 우리가 안 옮긴 것이다.
+            #
+            # **심판례가 이 목록에서 빠져 있었다.** 전에 이 문제를 고칠 때
+            # 이미 쌓인 데이터는 손으로 메웠는데 경로를 안 고쳤다. 그래서
+            # 그 뒤로 새로 들어온 심판례마다 의결일이 비었고, 상세 화면에
+            # 주황색 "확인 필요" 가 계속 떴다.
+            #
+            #     조심 2026서1109  메타에는 2026-08-18 이 있었다
+            #     조심 2026인1649  메타에는 2026-08-14 가 있었다
+            #     조심 2026구0212  메타에는 2026-08-21 이 있었다
+            #
+            # 데이터만 메우고 코드를 안 고치면 같은 구멍으로 계속 샌다.
+            if content.content_kind in KINDS_WITH_DECIDED_DATE:
                 decided = _parse_iso(meta.get("decided_at"))
                 content.announcement_date = decided
                 content.promulgation_date = decided
