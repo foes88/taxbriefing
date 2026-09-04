@@ -37,6 +37,9 @@ from app.services.render.telegram import (
 
 logger = get_logger(__name__)
 
+#: 발의일은 한국 날짜다. UTC 로 재면 하루가 어긋나는 날이 생긴다.
+_SEOUL = dt.timezone(dt.timedelta(hours=9))
+
 PUBLIC_STATES = (
     WorkflowStatus.PUBLISHED,
     WorkflowStatus.MONITORING,
@@ -99,7 +102,27 @@ def collect_cards(
         .order_by(TaxContent.risk.desc(), TaxContent.updated_at.desc())
     ).scalars().all()
 
-    bill_count = sum(1 for c in rows if c.content_kind == ContentKind.BILL.value)
+    # **법안은 「우리가 손댄 시각」 이 아니라 「발의일」 로 센다.**
+    #
+    # 예전에는 updated_at 이 최근 26시간 안이면 셌다. 그런데 updated_at 은
+    # 우리가 요약을 다시 돌리거나 상태를 맞출 때도 움직인다. 그래서
+    # 두 달 전에 발의된 법안이 오늘 아침 알림에 "발의된 개정안" 으로
+    # 섞여 나왔고, 받는 쪽에서는 새로 나온 것인지 알 수 없었다.
+    #
+    # 실제로 오늘 재 보니 이랬다.
+    #
+    #     updated_at 26시간   5건
+    #     어제 발의             3건
+    #
+    # 발의일은 국회가 준 값이고 우리가 건드리지 않는다. 그걸로 센다.
+    since_day = (since.astimezone(_SEOUL)).date()
+    bill_count = sum(
+        1
+        for c in rows
+        if c.content_kind == ContentKind.BILL.value
+        and c.announcement_date is not None
+        and c.announcement_date >= since_day
+    )
     rows = [c for c in rows if c.content_kind != ContentKind.BILL.value]
 
     cards: list[BriefingCard] = []
@@ -210,7 +233,14 @@ def main(argv: list[str] | None = None) -> int:
 
     today = now.astimezone(dt.timezone(dt.timedelta(hours=9))).date()
     text = render_digest(
-        cards, today=today, site_url=args.site, overflow=overflow, bills=bills
+        cards,
+        today=today,
+        site_url=args.site,
+        overflow=overflow,
+        bills=bills,
+        # 발의일을 며칠치로 셌는지 그대로 넘긴다. 문구가 창과 어긋나면
+        # 그 자체가 거짓말이 된다.
+        bill_days=max(1, round(args.hours / 24)),
     )
     chunks = split_for_telegram(text)
 

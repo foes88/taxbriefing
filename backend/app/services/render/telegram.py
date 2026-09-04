@@ -237,6 +237,7 @@ def render_digest(
     header: str = "오늘의 세무 브리핑",
     overflow: int = 0,
     bills: int = 0,
+    bill_days: int = 1,
 ) -> str:
     """일일 브리핑 전체를 렌더링한다.
 
@@ -270,7 +271,18 @@ def render_digest(
     # 여섯 자리를 전부 법안이 차지하고 시행 중인 개정이 밀려났다.
     if bills > 0:
         lines.append("")
-        lines.append(f"국회에 발의된 세법 개정안이 {bills}건 있습니다 (아직 법이 아닙니다).")
+        # **「새로 발의된」 이라고 분명히 적는다.**
+        #
+        # 예전 문구는 "국회에 발의된 세법 개정안이 4건 있습니다" 였다.
+        # 국회에 계류 중인 것이 통틀어 넷이라는 말로도 읽히고, 어제 새로
+        # 나온 것이 넷이라는 말로도 읽힌다. 실제로 "신규 법안인지
+        # 헷갈린다" 는 말을 들었다.
+        # 세는 창이 며칠이냐에 따라 말이 달라야 한다. --hours 를 늘려
+        # 돌리면 "어제" 가 거짓이 된다.
+        when = "어제" if bill_days <= 1 else f"최근 {bill_days}일 사이"
+        lines.append(
+            f"{when} 새로 발의된 세법 개정안이 {bills}건 있습니다 (아직 법이 아닙니다)."
+        )
 
     if site_url:
         lines.append("")
