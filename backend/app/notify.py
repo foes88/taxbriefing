@@ -102,26 +102,36 @@ def collect_cards(
         .order_by(TaxContent.risk.desc(), TaxContent.updated_at.desc())
     ).scalars().all()
 
-    # **법안은 「우리가 손댄 시각」 이 아니라 「발의일」 로 센다.**
+    # **법안은 「우리가 오늘 처음 알게 된 것」 만 센다.**
     #
-    # 예전에는 updated_at 이 최근 26시간 안이면 셌다. 그런데 updated_at 은
-    # 우리가 요약을 다시 돌리거나 상태를 맞출 때도 움직인다. 그래서
-    # 두 달 전에 발의된 법안이 오늘 아침 알림에 "발의된 개정안" 으로
-    # 섞여 나왔고, 받는 쪽에서는 새로 나온 것인지 알 수 없었다.
+    # 여기서 두 번 틀렸다.
     #
-    # 실제로 오늘 재 보니 이랬다.
+    # 처음에는 updated_at 이 최근 26시간 안이면 셌다. 그런데 updated_at 은
+    # 요약을 다시 돌리거나 상태를 맞출 때도 움직인다. 두 달 전 법안이
+    # 오늘 아침 알림에 섞여 나왔다.
     #
-    #     updated_at 26시간   5건
-    #     어제 발의             3건
+    # 그래서 발의일로 바꿨는데 그것도 틀렸다. 26시간 창을 날짜로 자르면
+    # **이틀에 걸쳐 두 번 세진다.**
     #
-    # 발의일은 국회가 준 값이고 우리가 건드리지 않는다. 그걸로 센다.
-    since_day = (since.astimezone(_SEOUL)).date()
+    #     09-03 실행 → 발의일 09-02 이후 5건
+    #     09-04 실행 → 발의일 09-03 이후 3건   ← 이 3건은 어제도 셌다
+    #
+    # 게다가 국회 목록에는 며칠 늦게 올라오는 건이 있다. 8월 14일에
+    # 발의된 것을 우리가 22일에 알았다. 발의일로 세면 그런 건 아예
+    # 못 알린다.
+    #
+    # 답은 **우리가 처음 알게 된 날**이다. created_at 은 한 번 정해지면
+    # 안 움직이고, 날짜로 자르면 겹치지 않는다. 실제로 법안 119건을
+    # 날짜별로 세니 합계가 정확히 119건이었다 — 두 날에 걸친 것이 없다.
+    #
+    # 그리고 늦게 올라온 건도 우리가 안 날 하루치에 정확히 한 번 들어간다.
+    today_kst = dt.datetime.now(_SEOUL).date()
     bill_count = sum(
         1
         for c in rows
         if c.content_kind == ContentKind.BILL.value
-        and c.announcement_date is not None
-        and c.announcement_date >= since_day
+        and c.created_at is not None
+        and c.created_at.astimezone(_SEOUL).date() == today_kst
     )
     rows = [c for c in rows if c.content_kind != ContentKind.BILL.value]
 
@@ -238,9 +248,6 @@ def main(argv: list[str] | None = None) -> int:
         site_url=args.site,
         overflow=overflow,
         bills=bills,
-        # 발의일을 며칠치로 셌는지 그대로 넘긴다. 문구가 창과 어긋나면
-        # 그 자체가 거짓말이 된다.
-        bill_days=max(1, round(args.hours / 24)),
     )
     chunks = split_for_telegram(text)
 
