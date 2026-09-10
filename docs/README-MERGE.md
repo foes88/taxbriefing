@@ -45,13 +45,20 @@ Actions 가 과금된다(월 600~900분). 대신 파이썬 패키지로 설치�
 
 ## 순서
 
-    0  신정 로컬을 Postgres 로 (SQLite 틈 없애기)      신정
-    1  신정 Supabase 에 CREATE SCHEMA tb               신정
-    2  TAXBRIEFING_DB_SCHEMA=tb 로 alembic upgrade     taxbriefing
-    3  데이터 이관 → 행수·값 지문 대조                  taxbriefing
+    0  신정 로컬을 Postgres 로 (SQLite 틈 없애기)      신정        끝
+    1  신정 Supabase 에 CREATE SCHEMA tb               신정        운영은 아직
+    2  TAXBRIEFING_DB_SCHEMA=tb 로 alembic upgrade     taxbriefing 로컬만 끝
+    3  데이터 이관 → 행수·값 지문 대조                  taxbriefing 로컬만 끝
     4  daily.yml 의 DB 주소만 신정 것으로               taxbriefing
     5  읽는 라우터 하나 + 화면(오늘·찾기)               신정
     6  거래처 업종 칸 + 담당 나누기                     신정
+
+**0~3 은 신정 로컬(`127.0.0.1:5434/shinjung`)에서 끝났다.** 427건이 원본과
+글자 단위로 같은 것을 확인했다. 5단계 화면은 지금 바로 만들 수 있다.
+
+**운영(Supabase)은 아직 하나도 안 건드렸다.** 절차는 `CUTOVER.md` 에 있다.
+막고 있는 것은 Supabase 접속 문자열이다 — 직결(:5432)과 풀러(:6543) 둘 다
+필요하다.
 
 **0~1 과 2~3 을 동시에 하지 않는다.** 한쪽이 DB 를 갈아엎는 동안 다른 쪽이
 데이터를 넣으면 어디까지 들어갔는지 알 수 없다.
@@ -63,12 +70,17 @@ Actions 가 과금된다(월 600~900분). 대신 파이썬 패키지로 설치�
 - **스키마 스위치** — `TAXBRIEFING_DB_SCHEMA=tb` 를 켜면 표 28개가 통째로
   `tb` 로 간다. 꺼 두면 지금까지와 같다. 양쪽 다 시험으로 못 박혀 있다
 - **Alembic 이 따라간다** — `version_table_schema` · `include_schemas`
-- **이관 절차** — `MIGRATE-REGION.md` 에 덤프·복원·대조가 적혀 있고 한 번
-  연습해서 검증했다. `docs/sql/verify_counts.sql` · `verify_checksums.sql`
+- **이관 절차** — `CUTOVER.md` 가 운영 절차서다. 배치 세우기부터 되돌리기
+  까지. `MIGRATE-REGION.md` 에는 덤프·복원 요령이 있다
+- **대조 도구** — `python -m app.verify_migration <원본URL파일> <이관본URL파일>
+  public tb`. 건수와 기본키 md5 지문을 표별로 본다. 어긋나면 종료코드 1.
+  **건수만 맞춰 보면 「같은 수의 다른 데이터」를 못 잡는다**
+- **씨앗 데이터** — `.local/seed_tb.sql` (12.6MB, 427건). 로컬 전용이다.
+  비밀번호 해시를 무효값으로 덮어 놨고 `audit_logs` 는 뺐다
 
 ## 아직 안 된 것
 
-- 신정 로컬 Postgres 전환 (신정 쪽 작업)
-- `tb` 스키마 생성 (신정 쪽 작업)
-- 화면 (신정 쪽 작업)
+- **운영 Supabase 이관** — 접속 문자열이 오면 `CUTOVER.md` 대로. 되돌리기
+  어려우므로 시작 전에 따로 여쭙는다
+- 화면 (신정 쪽 작업) — **씨앗이 들어가 있으므로 지금 시작할 수 있다**
 - 거래처 업종 칸 — **이게 없으면 합치는 이유가 성립하지 않는다**

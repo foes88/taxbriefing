@@ -129,7 +129,11 @@ jobs:
         working-directory: backend
         # 출처 하나가 죽어도 나머지는 돌아야 한다. 수집 실패로 요약까지 멈추지 않는다.
         continue-on-error: true
-        run: python -m app.collect --days "${{ inputs.days || '14' }}" --limit 120
+        # **--run-type 을 넘긴다.** 안 넘기면 CLI 기본값 MANUAL 로 기록돼서
+        # 예약 실행과 손으로 돌린 것을 나중에 구분할 수 없다. 실제로
+        # source_runs 200여 건이 전부 MANUAL 로 남아 있었다 — 예약이 밀렸는지
+        # 아예 안 돌았는지 DB 만 봐서는 알 수 없었다.
+        run: python -m app.collect --days "${{ inputs.days || '14' }}" --limit 120 --run-type "${{ github.event_name == 'schedule' && 'SCHEDULED' || 'MANUAL' }}"
 
       # **이 단계가 없어서 사흘 동안 아무것도 안 올라갔다.**
       #
