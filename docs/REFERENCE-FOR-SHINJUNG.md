@@ -81,9 +81,26 @@ SUPPORT         지원사업
 CRITICAL  긴급    HIGH  중요    MEDIUM  안내    LOW  참고
 ```
 
-**법안 · 입법예고 · 해석례 · 판례는 무조건 `LOW` 다.** 확정 안 된 것과
+**법안 · 입법예고 · 해석례 · 판례 · 심판례는 무조건 `LOW` 다.**
+(`app/bulk_draft.py` 의 `KINDS_ALWAYS_LOW` + `preannounced`) 확정 안 된 것과
 남의 사건에 [중요] 를 달면, 정작 확정된 개정이 그 아래 묻힌다. 세법 열
 건이 같은 날 예고된 적이 있다.
+
+**이 문서를 처음 쓸 때 심판례가 빠져 있었다.** 형제인 해석례·판례는 목록에
+있는데 심판례만 없어서 제목 낱말("가산세" 같은)로 판정됐고, 33건 중 30건에
+[중요] 가 붙어 있었다. 코드를 고치고 70건(법안 37 · 심판례 33)을 `LOW` 로
+되돌렸다. 지금은 어긋난 건이 0 이다.
+
+**그러니 화면에서 종류로 다시 거르지 마세요.** 서버가 정한 값을 그대로
+쓰면 됩니다. 대신 이관 후 아래 한 줄로 어긋남이 0 인지 확인해 주세요.
+
+```sql
+select content_kind, risk::text, count(*)
+  from tb.tax_contents
+ where content_kind in ('BILL','TRIBUNAL','INTERPRETATION','PRECEDENT')
+   and risk::text <> 'LOW'
+ group by 1,2;   -- 0 행이어야 합니다
+```
 
 ---
 

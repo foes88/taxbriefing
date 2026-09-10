@@ -132,6 +132,27 @@ def _decide_status(promulgated: dt.date | None, effective: dt.date | None, today
     return LegalStatus.UNKNOWN
 
 
+#: 무조건 [참고] 로 두는 종류.
+#:
+#: 중요도는 **지금 손봐야 하는 정도**다. 아래 넷은 사장님이 지금 손볼 것이
+#: 없다 — 법안은 통과할지 모르고, 나머지 셋은 **남의 사건에 대한 판단**이다.
+#:
+#: **심판례가 빠져 있었다.** 해석례·판례는 있는데 심판례만 없어서, 제목에
+#: "가산세" 같은 낱말이 있으면 [중요] 가 붙었다. 33건이 그랬다. 남의 사건
+#: 결정문에 "지금 손봐야 한다" 를 다는 셈이다.
+#:
+#: 목록으로 뽑아 둔다. 코드 안에 튜플로 박아 뒀더니 하나 빠진 것을 아무도
+#: 못 봤고, 시험으로 잡을 자리도 없었다.
+KINDS_ALWAYS_LOW: frozenset[str] = frozenset(
+    {
+        ContentKind.BILL.value,
+        ContentKind.INTERPRETATION.value,
+        ContentKind.PRECEDENT.value,
+        ContentKind.TRIBUNAL.value,
+    }
+)
+
+
 def _decide_risk(
     title: str, *, kind: str | None = None, preannounced: bool = False
 ) -> RiskLevel:
@@ -141,11 +162,7 @@ def _decide_risk(
     것에 할 일이 없고, 확정된 개정과 같은 표시를 달면 둘이 구분되지 않는다.
     실제로 아침 브리핑 6건이 전부 [중요] 법안으로 채워진 적이 있다.
     """
-    if kind in (
-        ContentKind.BILL.value,
-        ContentKind.INTERPRETATION.value,
-        ContentKind.PRECEDENT.value,
-    ):
+    if kind in KINDS_ALWAYS_LOW:
         return RiskLevel.LOW
     # 입법예고도 같다. 세법 전체가 한꺼번에 예고되는 날이 있는데
     # (2026년 개정안 10건이 같은 날 올라왔다) 그게 전부 [중요] 로
