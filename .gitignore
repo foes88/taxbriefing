@@ -33,3 +33,6 @@ Thumbs.db
 
 # �鿣�� ���� ����Ⱑ ����� ��Ÿ�� �α� (run-api.cmd)
 backend/api.log
+
+# 이관용 씨앗 덤프 — 커밋하지 않는다 (12MB, 이메일 포함)
+.local/
