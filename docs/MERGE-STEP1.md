@@ -18,42 +18,85 @@
 
 taxbriefing 아침 배치는 하루 20~30분이다. 월 600~900분. **356분에 안 들어간다.**
 
-### 해법 — Render 백엔드를 유료로 ($7/월)
+### 해법 — keep-awake 를 밖으로 뺀다 (돈 안 듦)
 
-keep-awake 는 무료 플랜이 15분 놀면 잠들기 때문에 도는 것이다. 유료로 올리면
-**그 워크플로가 통째로 필요 없어진다.**
+keep-awake 는 Render 무료 플랜이 15분 놀면 잠들기 때문에 도는 것이다.
+**깨우는 일 자체는 Actions 가 아니어도 된다.** 무료 핑 서비스(cron-job.org
+등)가 `/api/health` 를 치면 Actions 분을 한 푼도 안 쓴다.
 
-    1,584분 확보  →  taxbriefing 배치 900분을 넣고도 1,000분 넘게 남는다
+    keep-awake 워크플로 삭제  →  1,584분 확보
+    taxbriefing 배치 900분을 넣고도 1,000분 넘게 남는다
 
-덤으로 아침 첫 접속 1분 대기가 사라진다. 지금도 매일 겪고 있는 것이다.
+신정 `keep-awake.yml` 주석에도 이미 그 길이 적혀 있다 —
+"밖의 무료 핑 서비스(cron-job.org 등)로 5분마다 — 예약이 정확하고".
 
-**다른 길**
+**그리고 이건 taxbriefing 의 다른 문제도 같이 푼다.** 아침 배치가 예약 시각
+(07:17)을 못 지키고 09~15시에 도는 일이 잦았다. GitHub 예약은 보장이 아니다.
+같은 외부 스케줄러가 `workflow_dispatch` 를 정시에 호출하게 하면 시각이
+정확해진다. 도구 하나로 둘을 푼다.
+
+**차선 — Render 유료 ($7/월)**
+
+유료로 올려도 keep-awake 가 필요 없어져 같은 1,584분이 풀린다. 덤으로 아침
+첫 접속 1분 대기가 사라진다 — 지금도 매일 겪는 것이다. 돈을 쓸 값어치가
+있는지는 쓰는 사람이 정할 일이고, **1단계를 시작하는 데 필수는 아니다.**
+
+**안 되는 길**
 
 - `--pace` 를 줄인다 — summarize 12초 × 40건 = 8분, classify 8초 × 40건 = 5분.
-  **하루 13분을 자는 데 쓰고 그 시간에 과금된다.** 다만 GROQ 분당 한도(TPM 8,000)
-  때문에 둔 것이라 줄이면 429 가 늘고, 재시도 대기도 결국 시간이다. 아껴야
-  월 400분이고 그것만으로는 모자란다.
-- keep-awake 간격을 10분 → 15분 — 528분 절약. 이것도 모자라고, 잠드는 위험만
-  커진다.
-
-**유료 전환이 유일하게 깔끔하다.** 1단계를 시작하기 전에 정해야 한다.
+  하루 13분을 자는 데 쓰고 그 시간에 과금된다. 그런데 아껴야 월 400분이고,
+  GROQ 분당 한도(TPM 8,000) 때문에 둔 것이라 줄이면 429 가 는다. 모자란다
+- keep-awake 간격을 10분 → 15분 — 528분 절약. 모자라고 잠드는 위험만 커진다
 
 ---
 
-## 1. 표를 어떻게 넣나 — 별도 Base + `tb_` 접두어
+## 1. 표를 어떻게 넣나 — 별도 Base + 스키마 `tb`
 
-### 왜 스키마가 아니라 접두어인가
+### 접두어에서 스키마로 바꿨다
 
-스키마(`taxbriefing.*`)가 깔끔해 보이지만 **신정 로컬은 SQLite 다.**
-SQLite 는 스키마를 지원하지 않는다. 스키마로 가르면 로컬에서 개발이 안 된다.
+처음에는 `tb_` 접두어를 골랐다. **신정 로컬이 SQLite 이고 SQLite 는 스키마를
+지원하지 않아서**였다. 그런데 신정 쪽 조사에서 사실 하나가 나왔다.
 
-접두어는 양쪽에서 다 돈다.
+    재직 직원 3명 · 휴가 1건 · 업무일지 1건 · 지출·공지·도장 0건
+    감사로그 4건 (마지막 2026-08-21)
 
-    tax_contents      →  tb_tax_contents
-    raw_contents      →  tb_raw_contents
-    attachments       →  tb_attachments     ← 신정 것과 충돌하던 것
-    audit_logs        →  tb_audit_logs      ← 신정 것과 충돌하던 것
-    ...  29개 전부
+**아직 실사용 전이다.** 지킬 운영 데이터가 사실상 없다. 그러면 로컬을
+SQLite 에 맞출 이유도 없다 — **로컬도 Postgres 로 옮긴다.**
+
+그게 덤으로 2026-08-12 사고의 뿌리를 없앤다. 그 사고는 로컬 SQLite / 운영
+Postgres 라는 틈에서 났다. `DATABASE_URL` 이 빠지자 운영이 조용히 SQLite 로
+떨어졌다. 양쪽을 Postgres 로 맞추면 그 틈 자체가 사라진다.
+
+**지금이 가장 싸다.** 나중에 12명이 매일 쓰기 시작하면 못 한다.
+
+### 한 줄이면 된다 — 실제로 해 보고 확인했다
+
+`Base.metadata` 가 한 곳이라 스키마를 거기 박으면 표 전체가 따라간다.
+
+```python
+# app/models/base.py
+metadata = MetaData(naming_convention=NAMING_CONVENTION, schema="tb")
+```
+
+이 한 줄을 실제로 넣고 확인했다(확인 뒤 되돌림).
+
+    표 28개 · tb 스키마 28개 · public 으로 샌 것 0개
+    FK 52개 · 스키마 밖을 가리키는 것 0개
+    DDL:  CREATE TABLE tb.tax_contents (
+          ... REFERENCES tb.tenants (id)
+
+FK 는 코드에 `ForeignKey("tenants.id")` 처럼 스키마 없이 적혀 있지만
+**해석은 같은 스키마 안에서 된다.** 52개 전부 `tb` 를 가리켰다.
+
+겹치던 `attachments` · `audit_logs` 도 `tb.attachments` · `tb.audit_logs` 가
+되어 신정 것과 안 부딪힌다.
+
+### 스키마가 접두어보다 나은 이유
+
+- 표 29개 이름을 안 바꾼다 — 코드·시험·문서가 그대로다
+- **통째로 떼거나 따로 백업할 수 있다** (`pg_dump --schema=tb`)
+- 신정 `create_all()` 은 자기 Base 만 보므로 `tb` 를 안 건드린다
+- Alembic 은 `version_table_schema="tb"` 로 자기 버전표도 안에 둔다
 
 ### create_all 충돌은 Base 를 갈라서 막는다
 
@@ -62,17 +105,14 @@ SQLite 는 스키마를 지원하지 않는다. 스키마로 가르면 로컬에
     Base.metadata.create_all()      database.py:1058
     _run_migrations()               database.py:825~   손으로 쓴 ALTER TABLE
 
-여기서 Alembic 이 관리하는 표를 SQLAlchemy 가 먼저 만들어 버리면 리비전과 실제
-스키마가 어긋나고 그다음 `upgrade` 가 깨진다.
+Alembic 이 관리할 표를 SQLAlchemy 가 먼저 만들면 리비전과 실제 스키마가
+어긋나고 다음 `upgrade` 가 깨진다.
 
-**taxbriefing 모델은 자기 Base 를 쓴다.** 신정 `Base.metadata` 에 안 들어가므로
-`create_all()` 대상이 아니다. taxbriefing 표는 Alembic 이 만들고, 신정 표는
-지금 방식 그대로 둔다. 서로 안 만난다.
+**taxbriefing 은 자기 Base 를 쓴다.** 신정 `Base.metadata` 에 안 들어가므로
+`create_all()` 대상이 아니다. 서로 안 만난다.
 
-    신정 Base       → create_all + _run_migrations   (그대로)
-    taxbriefing Base → Alembic                        (그대로)
-
-두 방식이 한 DB 에 있지만 **각자 자기 표만 건드린다.**
+    신정 Base        → create_all + _run_migrations   (public, 그대로)
+    taxbriefing Base → Alembic                        (tb)
 
 ### 버리는 표
 
@@ -81,8 +121,6 @@ SQLite 는 스키마를 지원하지 않는다. 스키마로 가르면 로컬에
 
 `corrections`(정정 이력)· `deliveries`(발송 기록)는 **비어 있어도 가져간다.**
 아직 안 쓰였을 뿐 설계상 있어야 할 자리다.
-
----
 
 ## 2. DB 를 어디로 모으나 — Supabase 로
 
@@ -105,8 +143,10 @@ Supabase 로 옮긴다.
 1. **쓰는 작업을 전부 멈춘다.** 20초 간격으로 두 번 세서 같은지 본다 —
    지난번에 요약 배치가 돌고 있어서 행 수가 어긋났다
 2. `pg_dump --no-owner --no-privileges --format=custom`
-3. 표 이름에 `tb_` 를 붙여 복원 (덤프 뒤 `pg_restore --list` 로 이름을 바꾸거나,
-   빈 스키마에 Alembic 으로 표를 만들고 데이터만 `COPY`)
+3. **`tb` 스키마를 만들고 그 안에 복원한다.** 표 이름을 안 바꾸므로
+   `pg_restore` 앞에 `search_path` 를 `tb` 로 두거나, 덤프를
+   `--schema=public` 로 뜬 뒤 `sed` 로 스키마만 바꿔 넣는다.
+   가장 안전한 길은 Alembic 으로 `tb` 에 빈 표를 만들고 데이터만 옮기는 것이다
 4. **행 수와 값 지문을 대조한다** — `docs/sql/verify_counts.sql`,
    `docs/sql/verify_checksums.sql`
 5. 접속 문자열 교체
@@ -143,7 +183,7 @@ taxbriefing 은 자체 JWT + `users`. 신정은 JWT(HS256, 12시간) + `employee
 `TAXBRIEFING_DATABASE_URL` 은 신정 `DATABASE_URL` 과 같은 값이 되므로 하나로
 합친다.
 
-**keep-awake 는 지운다** (Render 유료 전환 뒤). 그게 이 단계의 예산을 만든다.
+**keep-awake 는 지운다** (외부 핑으로 뺀 뒤). 그게 이 단계의 예산을 만든다.
 
 ---
 
@@ -177,9 +217,10 @@ taxbriefing 자료까지 같은 DB 에 들어가면 그 사고가 더 커진다.
 
 | | 하는 일 | 되돌리기 |
 |---|---|---|
-| 0 | Render 백엔드 유료 전환 · keep-awake 삭제 | 플랜 되돌리고 워크플로 복구 |
+| 0 | keep-awake 를 외부 핑으로 빼고 워크플로 삭제 | 워크플로 복구 |
+| 0-1 | 신정 로컬을 Postgres 로 (SQLite 틈 없애기) | 로컬만이라 위험 없음 |
 | 1 | 코드를 `backend/taxbriefing/` 로 옮기고 라우터 하나 붙임 | 커밋 되돌리기 |
-| 2 | 표 이름에 `tb_` 접두어, 별도 Base, Alembic 분리 | 아직 운영에 안 씀 |
+| 2 | `metadata` 에 `schema="tb"` 한 줄, 별도 Base, Alembic 분리 | 아직 운영에 안 씀 |
 | 3 | 배치 멈춤 확인 → 덤프 → Supabase 복원 → 대조 | 옛 DB 그대로 있음 |
 | 4 | 접속 문자열 교체 (Render · GitHub Secrets · 로컬) | **문자열만 되돌림** |
 | 5 | 배치를 신정 저장소에서 돌림 | 워크플로 끄기 |
@@ -217,9 +258,17 @@ taxbriefing 자료까지 같은 DB 에 들어가면 그 사고가 더 커진다.
 
 양쪽 조사가 같은 결론에 닿았다 — 여기가 3단계의 첫 번째 할 일이다.
 
-채우는 사람이 결국 담당 직원이고 거래처가 100곳쯤 된다. 손으로 채우게 두면
-안 채워진다. **드롭다운(표준산업분류 또는 taxbriefing 업종 12개) + 엑셀 일괄
-등록에 칸 추가**를 같이 해야 실제로 채워진다.
+채우는 사람이 결국 담당 직원이고 거래처가 99곳이다. 손으로 채우게 두면
+안 채워진다. **드롭다운 + 엑셀 일괄 등록에 칸 추가**를 같이 해야 실제로 채워진다.
+
+자유 입력으로 두면 안 된다 — "음식점" 과 "일반음식점" 이 다른 값이 되어
+거를 수가 없다. `industry_code`(표준산업분류) + `industry_name` 으로 나눈다.
+
+### 담당이 한 사람에게 몰려 있다
+
+99곳 **전부 한 사람 담당**이다. 그러면 "김실장이 맡은 거래처 중 음식점" 이
+아직 성립하지 않는다. 업종 채우기와 **담당 나누기가 같이 가야** 3단계가
+값을 낸다.
 
 ---
 
@@ -227,8 +276,15 @@ taxbriefing 자료까지 같은 DB 에 들어가면 그 사고가 더 커진다.
 
 신정 쪽에서 확인 못 한 것들. 1단계를 시작하기 전에 필요한 것은 ★ 표시.
 
-- ★ **GitHub Actions 잔여 사용량** (Settings → Billing) — 0번 판단의 근거
-- 운영 표별 행 수 (Supabase 대시보드 SQL 편집기)
-- 거래처 건수 (거래처 화면 상단 "전체 N건")
-- 카카오 채널 개설 여부 — 5단계 이후라 급하지 않음
-- 하루 접속량 — 급하지 않음
+- ★ **GitHub Actions 잔여 사용량** (Settings → Billing) — 0번 판단의 근거.
+  계산으로는 1,644분을 쓰고 있는데 실측이 필요하다
+- 카카오 채널 개설 여부 — 한참 뒤 일이라 급하지 않음
+
+받은 값 (2차 회신):
+
+    운영 DB   Supabase PostgreSQL · ap-south-1 · 14MB · public 표 30개
+    재직 직원 3명 · 휴가 1 · 업무일지 1 · 지출·공지·도장 0 · 감사로그 4
+    거래처 99건 (전부 한 사람 담당)
+
+**아직 실사용 전이다.** 이 사실이 1절의 판단을 뒤집었다.
+합쳐도 40MB 안쪽이라 Supabase 무료 한도(500MB)에 여유가 크다.
