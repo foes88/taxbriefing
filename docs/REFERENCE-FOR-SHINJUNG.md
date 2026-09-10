@@ -133,10 +133,19 @@ risk_level[]      위험도
 industries[]      업종 (하나라도 겹치면 나온다)
 outcome           심판례 결론
 month             공포월 YYYY-MM
+promulgated_from / promulgated_to
 effective_from / effective_to
 deadline_within_days
-limit / offset
+limit (1~100, 기본 20) / offset
 ```
+
+**`next_cursor` 는 그냥 다음 `offset` 을 문자열로 담은 것이다.**
+(`str(offset + limit)`, 끝이면 `null`) 커서 토큰이 아니다.
+
+**모르는 파라미터는 조용히 무시된다.** FastAPI 가 그렇다. 신정 목록 규칙이
+`page` · `size` 라면 `?size=50` 을 보내도 오류 없이 **기본값 20건이 온다.**
+실제로 이관 점검 중에 이걸로 한 번 속았다. `limit` · `offset` 으로 보내고,
+받은 건수가 요청한 수와 같은지 한 번은 확인하세요.
 
 ## 상세 `GET /public/contents/{id}`
 

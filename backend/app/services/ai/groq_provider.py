@@ -531,11 +531,20 @@ class GroqProvider:
             if isinstance(w, dict) and _text(w.get("message"))
         ]
 
+        #: 한 줄 요약이 비면 **자리표시를 넣지 않는다.**
+        #:
+        #: 전에는 "요약이 생성되지 않았습니다." 를 넣었다. 그 문장이 화면
+        #: 목록에 그대로 떴다 — 사장님이 보는 자리에 우리 쪽 사정을 적은
+        #: 셈이고, 게다가 그 건은 「요약 완료」로 표시돼 다시 돌지도 않았다.
+        #: 실패는 실패로 둬야 다음 차례에 다시 시도한다.
+        one_line = _text(model_out.get("one_line_summary"))[:250]
+        if not one_line:
+            raise GroqError("모델이 한 줄 요약을 비워서 돌려줬습니다.")
+
         return {
             "schema_version": SCHEMA_VERSION,
             "title": _text(model_out.get("title"))[:120] or "제목 없음",
-            "one_line_summary": _text(model_out.get("one_line_summary"))[:250]
-            or "요약이 생성되지 않았습니다.",
+            "one_line_summary": one_line,
             "legal_status": _enum(
                 model_out.get("legal_status"),
                 (

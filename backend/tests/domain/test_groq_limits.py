@@ -14,6 +14,7 @@ import pytest
 
 from app.services.ai.groq_provider import (
     GroqDailyExhausted,
+    GroqError,
     GroqProvider,
     _daily_exhausted,
     _give_up,
@@ -266,3 +267,50 @@ class TestGiveUpMessage:
         assert "분당 한도 2회" in message
         assert "JSON 미완성 1회" in message
         assert "요청 과대 1회" in message
+
+
+class TestEmptyOneLineSummary:
+    """한 줄 요약이 비면 실패로 둔다 — 자리표시를 넣지 않는다.
+
+    전에는 "요약이 생성되지 않았습니다." 를 채워 넣었다. 그 문장이 찾기
+    화면 목록에 그대로 떴다. 사장님이 보는 자리에 우리 쪽 사정을 적은
+    것이고, 게다가 그 건은 「요약 완료」로 표시돼 다시 돌지도 않았다.
+    """
+
+    def _payload(self, one_line):
+        body = {
+            "one_line_summary": one_line,
+            "affected_users": [],
+            "excluded_users": [],
+            "changes": [],
+            "business_impact": [],
+            "required_actions": [],
+            "warnings": [],
+        }
+        return {"choices": [{"message": {"content": json.dumps(body, ensure_ascii=False)}}], "usage": {}}
+
+    @pytest.mark.parametrize("one_line", ["", "   ", None])
+    def test_empty_summary_is_an_error(self, one_line):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=self._payload(one_line))
+
+        with pytest.raises(GroqError) as caught:
+            _provider(handler).analyze(_request())
+        assert "한 줄 요약" in str(caught.value)
+
+    def test_placeholder_is_never_written(self):
+        """자리표시 문구가 코드에 남아 있지 않은지 본다."""
+        from pathlib import Path
+
+        import app.services.ai.groq_provider as mod
+
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        # 반환값 자리에 자리표시를 넣는 코드가 없어야 한다.
+        assert '"one_line_summary": _text' not in source
+
+    def test_real_summary_passes(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=self._payload("소득세율이 바뀝니다."))
+
+        result = _provider(handler).analyze(_request())
+        assert result.raw_output["one_line_summary"] == "소득세율이 바뀝니다."
