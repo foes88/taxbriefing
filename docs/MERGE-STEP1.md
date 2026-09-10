@@ -5,48 +5,65 @@
 
 ---
 
-## 0. 먼저 — 막는 것이 하나 있다
+## 0. Actions 예산 — 계산이 틀렸고, 답도 달라졌다
 
-**GitHub Actions 무료분이 모자란다.**
+### 내가 틀린 것
 
-    신정 keep-awake   평일 07~19시 10분마다 = 하루 72회 × 22일 = 1,584분/월
-    신정 db-backup    매일 1회 × 2분              =    60분/월
-    ─────────────────────────────────────────────────────────
-    지금 쓰는 것                                  = 1,644분/월
-    무료 한도                                     = 2,000분/월
-    남는 것                                       =   356분/월
+`keep-awake.yml` 의 cron 을 보고 "평일 07~19시 10분마다 = 하루 72회 × 22일 =
+1,584분/월" 이라고 곱했다. **워크플로가 그만큼 돈다고 가정한 것이지 센 것이
+아니었다.** 실제 청구 화면은 이랬다.
 
-taxbriefing 아침 배치는 하루 20~30분이다. 월 600~900분. **356분에 안 들어간다.**
+    Actions minutes    30 min used / 2,000 min included
 
-### 해법 — keep-awake 를 밖으로 뺀다 (돈 안 듦)
+50배 넘게 빗나갔다.
 
-keep-awake 는 Render 무료 플랜이 15분 놀면 잠들기 때문에 도는 것이다.
-**깨우는 일 자체는 Actions 가 아니어도 된다.** 무료 핑 서비스(cron-job.org
-등)가 `/api/health` 를 치면 Actions 분을 한 푼도 안 쓴다.
+### 진짜 이유 — 저장소 공개 여부
 
-    keep-awake 워크플로 삭제  →  1,584분 확보
-    taxbriefing 배치 900분을 넣고도 1,000분 넘게 남는다
+    foes88/taxbriefing       공개   → Actions 무료·무제한
+    foes88/shinjung-system   비공개 → 2,000분/월 계량
 
-신정 `keep-awake.yml` 주석에도 이미 그 길이 적혀 있다 —
-"밖의 무료 핑 서비스(cron-job.org 등)로 5분마다 — 예약이 정확하고".
+**taxbriefing 배치는 공개 저장소라 지금 공짜로 돈다.** 계량되는 것은 신정
+것뿐이고 그게 30분이다.
 
-**그리고 이건 taxbriefing 의 다른 문제도 같이 푼다.** 아침 배치가 예약 시각
-(07:17)을 못 지키고 09~15시에 도는 일이 잦았다. GitHub 예약은 보장이 아니다.
-같은 외부 스케줄러가 `workflow_dispatch` 를 정시에 호출하게 하면 시각이
-정확해진다. 도구 하나로 둘을 푼다.
+그러면 답이 뒤집힌다. **배치를 신정(비공개)으로 옮기는 순간 과금이 시작된다.**
+월 600~900분. 2,000분 안에 들어가긴 하지만, 공짜였던 것에 값을 붙이는 셈이다.
 
-**차선 — Render 유료 ($7/월)**
+### 그래서 — 배치는 공개 저장소에 남긴다
 
-유료로 올려도 keep-awake 가 필요 없어져 같은 1,584분이 풀린다. 덤으로 아침
-첫 접속 1분 대기가 사라진다 — 지금도 매일 겪는 것이다. 돈을 쓸 값어치가
-있는지는 쓰는 사람이 정할 일이고, **1단계를 시작하는 데 필수는 아니다.**
+무료를 지키는 것이 목표라면 이게 답이다.
 
-**안 되는 길**
+    코드     taxbriefing 공개 저장소 (파이썬 패키지)
+    배치     taxbriefing 공개 저장소 (Actions 무료)
+    DB       신정 Supabase 의 tb 스키마          ← 여기서 합쳐진다
+    화면·API 신정 (패키지를 의존성으로 설치)
 
-- `--pace` 를 줄인다 — summarize 12초 × 40건 = 8분, classify 8초 × 40건 = 5분.
-  하루 13분을 자는 데 쓰고 그 시간에 과금된다. 그런데 아껴야 월 400분이고,
-  GROQ 분당 한도(TPM 8,000) 때문에 둔 것이라 줄이면 429 가 는다. 모자란다
-- keep-awake 간격을 10분 → 15분 — 528분 절약. 모자라고 잠드는 위험만 커진다
+`backend/pyproject.toml` 이 이미 있고 (`taxbriefing-backend 0.1.0`),
+워크플로도 이미 `pip install ./backend` 로 설치해서 쓴다. **신정도 같은 방식으로
+쓰면 된다.**
+
+```
+# 신정 requirements.txt
+taxbriefing-backend @ git+https://github.com/foes88/taxbriefing@main#subdirectory=backend
+```
+
+모델이 한 곳에만 있으므로 **정의가 갈라지지 않는다.** 신정은 그 모델로
+`tb` 스키마를 읽기만 한다.
+
+### keep-awake 는 그냥 지워도 된다
+
+**"누가 로그인하면 어차피 깨어난다."** 맞다. keep-awake 가 하는 일은
+"아침 첫 사람이 1분 안 기다리게" 하는 것뿐이다.
+
+지금 쓰는 사람이 3명이고 아직 실사용 전이다. 한 사람이 아침에 한 번 1분
+기다리는 값이 워크플로 하나를 유지할 값보다 크지 않다.
+
+**배치는 API 를 안 쓴다.** 수집·게시·요약·발송이 전부 DB 에 직접 붙는다
+(`daily.yml` 주석: "Render 가 없어도 돈다"). 서버가 자고 있어도 아침 배치는
+그대로 돈다.
+
+다만 **아침 텔레그램 링크를 누르는 사람은 그 1분을 맞는다.** 그게 매일
+아침이라면 값어치가 있다. 그때는 워크플로를 따로 만들 것 없이 **배치 맨
+끝에 핑 한 번**을 붙이면 된다 — 이미 도는 작업이라 공짜다.
 
 ---
 
@@ -170,33 +187,42 @@ taxbriefing 은 자체 JWT + `users`. 신정은 JWT(HS256, 12시간) + `employee
 
 ---
 
-## 4. 배치 — 자리는 이미 있다
+## 4. 배치 — 옮기지 않는다
 
-신정도 GitHub Actions 를 쓴다(`db-backup.yml`, `keep-awake.yml`). taxbriefing
-`daily.yml` 을 그대로 옮기고 시크릿 7개를 신정 저장소에 넣는다.
+`daily.yml` 은 **taxbriefing 공개 저장소에 그대로 둔다.** 옮기면 과금되고,
+남기면 공짜다. 바꾸는 것은 하나뿐이다.
+
+    TAXBRIEFING_DATABASE_URL  →  신정 Supabase (tb 스키마)
+
+시크릿 7개도 그 저장소에 이미 들어 있으므로 손댈 것이 없다.
 
     TAXBRIEFING_LAW_API_OC / ASSEMBLY_API_KEY / LAWMAKING_OC
     TAXBRIEFING_NAVER_CLIENT_ID / SECRET
     TAXBRIEFING_AI_API_KEY
     TAXBRIEFING_TELEGRAM_BOT_TOKEN / CHAT_ID
 
-`TAXBRIEFING_DATABASE_URL` 은 신정 `DATABASE_URL` 과 같은 값이 되므로 하나로
-합친다.
-
-**keep-awake 는 지운다** (외부 핑으로 뺀 뒤). 그게 이 단계의 예산을 만든다.
+**남는 문제 하나** — GitHub 예약이 시각을 못 지킨다. 07:17 인데 09~15시에
+돌거나 아예 안 돈 날이 있었다. 무료 외부 스케줄러가 `workflow_dispatch` 를
+정시에 부르게 하면 해결된다. 이것도 돈이 안 든다.
 
 ---
 
-## 5. 코드를 어디에 두나
+## 5. 코드를 어디에 두나 — 옮기지 않고 의존한다
 
-신정 `main.py` 는 3,000줄이고 라우터 분리가 안 돼 있다. 그쪽 조언대로 **거기
-붙이지 않는다.**
+처음에는 `backend/taxbriefing/` 로 통째로 옮기려 했다. 그러면 배치도 따라
+가야 하고 과금이 시작된다.
 
-    backend/taxbriefing/          taxbriefing app/ 을 통째로
-    backend/routers_taxbriefing.py   공개 API 7개 + 관리자
-    backend/alembic/                 taxbriefing 표만 관리
+**패키지로 쓴다.**
 
-`main.py` 에는 `include_router` 한 줄만 늘린다.
+    taxbriefing 저장소   모델·수집기·요약·배치  (그대로, 공개)
+    신정 저장소          routers_taxbriefing.py  (읽는 라우터만)
+                        Vue 화면
+
+신정 `main.py`(3,000줄)에는 `include_router` 한 줄만 는다. 그쪽 조언대로
+거기 붙이지 않는다.
+
+**모델 정의가 한 곳에만 있다.** 양쪽에 두면 언젠가 갈라지고, 갈라지면
+한쪽이 조용히 틀린 값을 읽는다.
 
 ---
 
@@ -217,14 +243,13 @@ taxbriefing 자료까지 같은 DB 에 들어가면 그 사고가 더 커진다.
 
 | | 하는 일 | 되돌리기 |
 |---|---|---|
-| 0 | keep-awake 를 외부 핑으로 빼고 워크플로 삭제 | 워크플로 복구 |
-| 0-1 | 신정 로컬을 Postgres 로 (SQLite 틈 없애기) | 로컬만이라 위험 없음 |
-| 1 | 코드를 `backend/taxbriefing/` 로 옮기고 라우터 하나 붙임 | 커밋 되돌리기 |
-| 2 | `metadata` 에 `schema="tb"` 한 줄, 별도 Base, Alembic 분리 | 아직 운영에 안 씀 |
-| 3 | 배치 멈춤 확인 → 덤프 → Supabase 복원 → 대조 | 옛 DB 그대로 있음 |
-| 4 | 접속 문자열 교체 (Render · GitHub Secrets · 로컬) | **문자열만 되돌림** |
-| 5 | 배치를 신정 저장소에서 돌림 | 워크플로 끄기 |
-| 6 | 일주일 지켜보고 옛 DB 정리 | — |
+| 0 | 신정 로컬을 Postgres 로 (SQLite 틈 없애기) | 로컬만이라 위험 없음 |
+| 1 | taxbriefing 에 `schema="tb"` 한 줄 + Alembic `version_table_schema` | 커밋 되돌리기 |
+| 2 | 신정 Supabase 에 `tb` 스키마 만들고 Alembic 으로 표 생성 | 스키마 통째로 드롭 |
+| 3 | 배치 멈춤 확인 → 덤프 → `tb` 로 데이터 이관 → **행수·지문 대조** | 옛 DB 그대로 |
+| 4 | `daily.yml` 의 DB 주소만 신정 것으로 | **주소만 되돌림** |
+| 5 | 신정에 패키지 의존성 + 읽는 라우터 하나 | 커밋 되돌리기 |
+| 6 | 일주일 지켜보고 옛 Neon 정리 | — |
 
 **화면은 이 단계에서 하나도 안 건드린다.** 기존 taxbriefing 사이트가 그대로
 돌고 아침 텔레그램도 그대로 나간다. 자료만 한 곳으로 모인다.
