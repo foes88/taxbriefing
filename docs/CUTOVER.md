@@ -325,12 +325,49 @@ URL 은 **파일 경로로 넘긴다.** 명령줄에 적으면 셸 기록과 프
 
 ## 5-6. 주소를 바꾼다
 
-| 어디 | 이름 | 값 |
-|---|---|---|
-| GitHub Actions 시크릿 | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **직결**>` |
-| GitHub Actions 시크릿 | `TAXBRIEFING_DB_SCHEMA` | `tb` |
-| Render 환경변수 | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **풀러**>` |
-| Render 환경변수 | `TAXBRIEFING_DB_SCHEMA` | `tb` |
+| 어디 | 어디에 | 이름 | 값 |
+|---|---|---|---|
+| GitHub | Secrets | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **직결**>` |
+| GitHub | **Variables** | `TAXBRIEFING_DB_SCHEMA` | `tb` |
+| Render | 환경변수 | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **풀러**>` |
+| Render | 환경변수 | `TAXBRIEFING_DB_SCHEMA` | `tb` |
+| Render | 환경변수 | `RUN_MIGRATIONS` | `1` → **`0`** |
+
+GitHub 는 `Settings → Secrets and variables → Actions` 한 화면에 탭이 둘이다.
+**주소는 Secrets, 스키마 이름은 Variables 다.** 스키마는 비밀이 아니고,
+시크릿으로 두면 값이 맞는지 눈으로 확인할 수 없다.
+
+**`RUN_MIGRATIONS` 를 `0` 으로 내린다.** 지금은 Render 가 뜰 때마다
+`alembic upgrade head` 를 돌린다. Neon 을 우리 혼자 쓸 때는 편한 설정이지만,
+신정과 같은 DB 를 쓰게 되면 **우리 쪽 배포가 저쪽 DB 에 스키마 변경을 거는
+셈**이 된다. 게다가 Render 는 풀러로 붙으므로 그 alembic 이 깨진다.
+마이그레이션은 5-1 에서 직결로 한 번 돌린 것으로 끝이다.
+
+## 5-6-1. 넣기만 하면 되는 게 아니다 — **워크플로가 읽어야 한다**
+
+시크릿·변수를 넣어도 워크플로의 `env:` 블록에 줄이 없으면 프로세스에
+전달되지 않는다. 실제로 `TAXBRIEFING_DB_SCHEMA` 가 `daily.yml` 에 없었다.
+그대로 갔으면 배치가 Supabase 에 붙어 **`public` 에 썼을 것이고, 신정 표 30개
+사이에 우리 표가 섞였을 것이다.** 이관에서 제일 조용히 망가지는 자리다.
+
+지금은 들어가 있다.
+
+```yaml
+env:
+  TAXBRIEFING_DATABASE_URL: ${{ secrets.TAXBRIEFING_DATABASE_URL }}
+  TAXBRIEFING_DB_SCHEMA: ${{ vars.TAXBRIEFING_DB_SCHEMA }}
+```
+
+`render.yaml` 에도 `TAXBRIEFING_DB_SCHEMA` 를 넣었다(`sync: false`).
+
+**확인하는 법** — 손으로 한 번 돌리고(5-7) 로그 첫머리에서 본다. 또는
+이관 후 `public` 에 우리 표가 생기지 않았는지 센다.
+
+```sql
+select count(*) from information_schema.tables
+ where table_schema='public' and table_name in ('tax_contents','source_runs');
+-- 0 이어야 한다
+```
 
 Render 는 저장하면 다시 뜬다. 뜨고 나서 확인한다.
 

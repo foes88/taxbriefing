@@ -29,6 +29,12 @@ services:
       - key: TAXBRIEFING_DATABASE_URL
         sync: false
 
+      # 표를 어느 스키마에서 읽고 쓸지. 비우면 public 이다.
+      # 신정 Supabase 로 옮긴 뒤에는 tb 다. 안 넣으면 신정 표 사이에서
+      # 우리 표를 찾다가 못 찾는다.
+      - key: TAXBRIEFING_DB_SCHEMA
+        sync: false
+
       # HS256 은 32바이트 이상을 요구한다. Render 가 안전한 값을 만들어 준다.
       - key: TAXBRIEFING_JWT_SECRET
         generateValue: true
@@ -71,6 +77,16 @@ services:
         value: https://taxbriefing.vercel.app
 
       # 기동 시 마이그레이션 실행. 인스턴스가 1개인 무료 티어에서만 안전하다.
+      #
+      # **신정 Supabase 로 옮긴 뒤에는 "0" 으로 내린다.** 이유가 둘이다.
+      #
+      # 1. Render 는 풀러(:6543)로 붙는데, 풀러 위에서 alembic 을 돌리면
+      #    준비된 구문이 엉켜 중간에 깨진다. 마이그레이션은 직결(:5432)로
+      #    사람이 한 번 돌린다.
+      # 2. 기동할 때마다 도는 것은 Neon 을 우리 혼자 쓸 때 이야기다. 신정과
+      #    같은 DB 를 쓰게 되면, 우리 쪽 배포가 저쪽 DB 에 스키마 변경을
+      #    거는 셈이 된다. 그런 건 알고 하는 것이지 부수 효과로 일어나면
+      #    안 된다.
       - key: RUN_MIGRATIONS
         value: "1"
 
