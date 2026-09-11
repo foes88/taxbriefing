@@ -11,13 +11,44 @@
 
 | 단계 | 무엇 | 누가 | 상태 |
 |---|---|---|---|
-| 0 | 신정 로컬을 Postgres 로 | 신정 | **끝** |
-| 1 | `CREATE SCHEMA tb` | 신정 | 로컬 끝 · **운영 아직** |
-| 2 | `TAXBRIEFING_DB_SCHEMA=tb` 로 alembic | taxbriefing | 로컬 끝 · **운영 아직** |
-| 3 | 데이터 이관 + 대조 | taxbriefing | 로컬 끝 · **운영 아직** |
-| 4 | 배치 DB 주소 교체 | taxbriefing | 아직 |
-| 5 | 읽는 라우터 + 화면 | 신정 | **지금 시작 가능** |
-| 6 | 거래처 업종 칸 + 담당 나누기 | 신정 | 아직 |
+| 0 | 신정 로컬을 Postgres 로 | 신정 | 끝 |
+| 1 | `CREATE SCHEMA tb` | 신정 | 로컬 끝 · **운영도 끝** |
+| 2 | `TAXBRIEFING_DB_SCHEMA=tb` 로 alembic | 신정이 대신 함 | 로컬 끝 · **운영도 끝** |
+| 3 | 데이터 이관 + 대조 | taxbriefing | 로컬 끝 · **운영은 다시 해야 함** |
+| 4 | 배치 DB 주소 교체 | taxbriefing | **아직** |
+| 5 | 읽는 라우터 + 화면 | 신정 | 끝 (59건 검사 통과) |
+| 6 | 거래처 업종 칸 | 신정 | 끝 (13코드) |
+
+## 1-1. 운영 `tb` 는 이미 있고, 자료가 **낡았다**
+
+신정 쪽이 9/10 에 `.local/seed_tb.sql`(로컬용 씨앗)을 운영에 넣었다. 표는
+제대로 섰는데 **내용이 어긋난다.** 씨앗을 뽑은 뒤에도 배치가 계속 돌았기
+때문이다.
+
+```
+표                          원본(Neon)   운영 tb
+tax_contents                     432       427   ★
+content_versions                 432       427   ★
+content_sources                  432       427   ★
+reviews                          432       427   ★
+raw_contents                    1058      1025   ★
+raw_content_versions            1174      1133   ★
+content_evidence                2158      2133   ★
+source_runs                      222       213   ★
+ai_analyses                      261       259   ★
+audit_logs                         6         0   ★
+sources / tags / users / idempotency_records     일치
+```
+
+**열 개 표가 어긋난다.** `audit_logs` 하나가 아니다. 게다가 `users` 두 계정은
+씨앗이라 비밀번호 해시가 무효값이다.
+
+그래서 **부족한 것만 채우는 길은 성립하지 않는다.** 어제 빠진 6건을 채워도
+오늘 5건이 또 벌어졌고, 내일 아침 09:2x 에 또 벌어진다.
+
+**진짜 원인은 5-0 을 아무도 안 했다는 것이다** — 배치를 안 세우고 뽑았다.
+절차서에 그 단계를 맨 앞에 둔 이유가 이것인데, 그 절차서보다 이관이 먼저
+시작됐다.
 
 로컬(`127.0.0.1:5434/shinjung`, 스키마 `tb`)은 원본과 **글자 단위로 같다.**
 
@@ -69,25 +100,45 @@ audit_logs                       6      0   ★불일치 ← 씨앗에서 일부
 
 이것들이 오기 전에는 운영 이관을 시작할 수 없다.
 
-## 3-1. Supabase 접속 문자열 — **두 개 다** 필요하다
+## 3-1. 접속 — **직결은 없다. 세션 풀러를 쓴다**
 
-지금 신정 `.env` 의 `DATABASE_URL` 은 로컬(`127.0.0.1:5434`)을 가리킨다.
-운영 주소는 내게 없다.
+처음에 「직결(:5432)과 풀러(:6543)」라고 적었다. **이 프로젝트에 직결
+호스트는 열려 있지 않다.**
 
 ```
-:5432  직결(direct)     ← Alembic · pg_dump · psql 은 이쪽
-:6543  풀러(pooler)     ← 앱 런타임(Render)은 이쪽
+db.<project>.supabase.co        AAAA 만 있고 A 가 없다
+                                 → 이 회선에서 getaddrinfo 가 실패한다
+                                   (IPv4 애드온 미사용 신규 프로젝트)
 ```
 
-풀러로 Alembic 을 돌리면 준비된 구문(prepared statement)이 엉켜 중간에
-깨진다. 그리고 **풀러는 접속 옵션의 `search_path` 를 버린다** — 그래서
-`env.py` 안에서 `SET search_path` 를 직접 건다(아래 5-2).
+DNS 에 `AAAA` 자체는 있다. 없는 것은 `A` 다. 결과는 같지만 이유는 다르게
+적어 둔다 — IPv6 가 되는 회선에서는 붙을 수도 있다는 뜻이기 때문이다.
 
-## 3-2. 업종 칸 — 이관을 막지는 않지만 **합치는 이유**가 여기 있다
+실제로 쓰는 것은 둘이고 **둘 다 풀러다.**
 
-거래처에 `industry_code` 가 없으면 6단계(담당 나누기)가 성립하지 않는다.
-세무브리핑을 신정에 넣는 이유가 "내가 맡은 사장님한테 필요한 것만" 인데,
-거래처가 무슨 업종인지 모르면 그 말이 성립하지 않는다.
+```
+aws-1-ap-south-1.pooler.supabase.com:5432   세션(session) 모드     ← 전부 이쪽
+aws-1-ap-south-1.pooler.supabase.com:6543   트랜잭션(transaction)
+```
+
+**「풀러에서 alembic 이 깨진다」는 트랜잭션 모드 이야기다.** 세션 모드는
+접속 하나를 세션 내내 쥐고 있으므로 DDL 도 준비된 구문도 문제없다. 실제로
+신정 쪽이 세션 풀러로 `alembic upgrade head` 를 돌려 표 29개를 세웠다.
+
+**Render 도 :6543 이 아니라 :5432 다.** Render 는 오래 떠 있는 서버라
+트랜잭션 모드가 맞지 않고, psycopg3 는 같은 구문을 5번 실행하면 준비된
+구문으로 바꾸는데 Supavisor 트랜잭션 모드가 그걸 거부한다. 굳이 :6543 을
+쓰려면 `?prepare_threshold=0` 을 붙여야 한다.
+
+속도는 오히려 낫다 — 세션 풀러 TCP 왕복 **132ms**, Neon 오하이오 189ms.
+
+실제 문자열은 `shinjung-system/backend/.env.production` 의 `DATABASE_URL`
+그대로다. 이 문서에는 적지 않는다.
+
+## 3-2. 업종 칸 — **끝났다**
+
+신정 쪽이 거래처에 업종 칸(13코드)을 넣었고 세무브리핑 분류표와 같다.
+6단계를 막던 것이 풀렸다.
 
 ---
 
@@ -219,14 +270,31 @@ GitHub → Actions → API 깨워두기 → ⋯ → Disable workflow
 
 세워 둔 것을 **눈으로 확인한다.** "예약된 것이 없겠지" 로 넘어가지 않는다.
 
+**이 단계를 건너뛰어서 한 번 어긋났다.** 9/10 에 배치를 세우지 않고 뽑았고,
+그 뒤로 배치가 이틀 더 돌아 열 개 표가 벌어졌다(1-1). 하루 더 두면 또
+벌어진다. **뽑기 전에 세우는 것이 아니라, 세우고 나서 뽑는 것이다.**
+
+### 이미 `tb` 에 자료가 들어 있다면 — 비우고 다시 한다
+
+낡은 것을 남겨 두고 모자란 것만 채우는 길은 안 된다. 어제 빠진 것을 채워도
+오늘 벌어진 것이 남고, 무엇이 맞고 무엇이 낡았는지 표마다 따져야 한다.
+**5-5 의 지문 검증이 통과할 수 없는 상태로 끝난다.**
+
+```sql
+drop schema tb cascade;
+```
+
+`tb` 만 지운다. 신정 `public` 은 안 건드린다. 원본은 Neon 에 그대로 있으므로
+되돌릴 것이 없다 — **지우는 것은 사본이다.**
+
 ## 5-1. `tb` 스키마와 표를 만든다
 
 ```
-psql "postgresql://<Supabase 직결>" -c "create schema if not exists tb;"
+psql "postgresql://<Supabase 세션 풀러 :5432>" -c "create schema if not exists tb;"
 
 cd backend
 set TAXBRIEFING_DB_SCHEMA=tb
-set TAXBRIEFING_DATABASE_URL=postgresql+psycopg://<Supabase 직결>
+set TAXBRIEFING_DATABASE_URL=postgresql+psycopg://<Supabase 세션 풀러 :5432>
 alembic upgrade head
 ```
 
@@ -301,7 +369,7 @@ SELECT pg_catalog.setval('public.   → SELECT pg_catalog.setval('tb.
 ## 5-4. 넣는다
 
 ```
-psql "postgresql://<Supabase 직결>" -v ON_ERROR_STOP=1 -f cutover.sql
+psql "postgresql://<Supabase 세션 풀러 :5432>" -v ON_ERROR_STOP=1 -f cutover.sql
 ```
 
 `ON_ERROR_STOP=1` 없이 돌리면 중간에 실패한 COPY 를 건너뛰고 끝까지 가서
@@ -327,9 +395,9 @@ URL 은 **파일 경로로 넘긴다.** 명령줄에 적으면 셸 기록과 프
 
 | 어디 | 어디에 | 이름 | 값 |
 |---|---|---|---|
-| GitHub | Secrets | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **직결**>` |
+| GitHub | Secrets | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://…pooler…:**5432**/postgres` (세션) |
 | GitHub | **Variables** | `TAXBRIEFING_DB_SCHEMA` | `tb` |
-| Render | 환경변수 | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://<Supabase **풀러**>` |
+| Render | 환경변수 | `TAXBRIEFING_DATABASE_URL` | `postgresql+psycopg://…pooler…:**5432**/postgres` (세션) |
 | Render | 환경변수 | `TAXBRIEFING_DB_SCHEMA` | `tb` |
 | Render | 환경변수 | `RUN_MIGRATIONS` | `1` → **`0`** |
 
@@ -340,8 +408,11 @@ GitHub 는 `Settings → Secrets and variables → Actions` 한 화면에 탭이
 **`RUN_MIGRATIONS` 를 `0` 으로 내린다.** 지금은 Render 가 뜰 때마다
 `alembic upgrade head` 를 돌린다. Neon 을 우리 혼자 쓸 때는 편한 설정이지만,
 신정과 같은 DB 를 쓰게 되면 **우리 쪽 배포가 저쪽 DB 에 스키마 변경을 거는
-셈**이 된다. 게다가 Render 는 풀러로 붙으므로 그 alembic 이 깨진다.
-마이그레이션은 5-1 에서 직결로 한 번 돌린 것으로 끝이다.
+셈**이 된다. 그런 건 알고 하는 것이지 배포의 부수 효과로 일어나면 안 된다.
+마이그레이션은 5-1 에서 사람이 한 번 돌린 것으로 끝이다.
+
+(세션 풀러를 쓰므로 alembic 자체는 돈다. 안 돌아서 내리는 게 아니라
+**돌면 안 되는 것이라 내린다.**)
 
 ## 5-6-1. 넣기만 하면 되는 게 아니다 — **워크플로가 읽어야 한다**
 
